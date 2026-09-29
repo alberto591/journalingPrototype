@@ -96,9 +96,10 @@ export interface JournalSession {
   user_id: string;
   date: string; // YYYY-MM-DD
   created_at: string;
-  // Movement 1: Frenar
+  // Movement 1: Frenar (Slow Down)
   breathing_completed: boolean;
   silence_duration_seconds: number;
+  gratitude_items?: string[]; // 4 specific things from the last 24h (from Holy Work email)
   // Movement 2: Limpiar el ruido
   free_writing_1m?: string;
   deep_writing_10m?: string;
@@ -110,7 +111,9 @@ export interface JournalSession {
   // Movement 4: Escuchar
   listening_notes?: string;
   listening_duration_seconds: number;
-  // Movement 5: Actuar
+  // Movement 5: Actuar (Act)
+  vision_sentence?: string;   // 3-month vision re-read (from Holy Work email)
+  identity_words?: string;    // Identity word(s) to become (from Holy Work email)
   action_type: 'action' | 'release'; // 'Acción' or 'Algo que soltar'
   action_commitment: string;
   // Metadata

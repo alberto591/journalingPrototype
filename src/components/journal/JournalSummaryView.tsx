@@ -15,7 +15,9 @@ import {
   Calendar,
   Clock,
   Copy,
-  Check
+  Check,
+  Eye,
+  User
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 
@@ -103,6 +105,21 @@ Rumbo a la noche sin evasivas. ¡Que tengan un día fecundo!`;
               Completaste los 3 ciclos de respiración profunda (4s inhalar / 8s exhalar) y sostuviste {session.silence_duration_seconds} segundos de silencio santo con la oración de apertura.
             </p>
           </div>
+          {session.gratitude_items && session.gratitude_items.length > 0 && (
+            <div className="p-4 rounded-2xl bg-sand-50/60 border border-sand-200 space-y-2">
+              <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide block">
+                Gratitud · {session.gratitude_items.length} cosas
+              </span>
+              <ol className="space-y-1">
+                {session.gratitude_items.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-stone-700">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
+                    <span className="leading-relaxed">{item}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* 2. Qué estaba ocupando tu mente */}
@@ -169,12 +186,37 @@ Rumbo a la noche sin evasivas. ¡Que tengan un día fecundo!`;
           </div>
         </div>
 
-        {/* 5. Qué vas a hacer (El Compromiso) */}
+        {/* 5. Visión, Identidad y Compromiso */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-400">
             <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>5. Qué vas a hacer · Tu Compromiso de hoy</span>
+            <span>5. Qué vas a hacer · Visión · Identidad · Compromiso</span>
           </div>
+
+          {session.vision_sentence && (
+            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1">
+              <div className="flex items-center gap-1.5 text-amber-800 text-[11px] font-bold uppercase tracking-wide">
+                <Eye className="w-3.5 h-3.5" />
+                Visión en 3 meses
+              </div>
+              <p className="font-serif text-sm text-stone-800 italic leading-relaxed">
+                "{session.vision_sentence}"
+              </p>
+            </div>
+          )}
+
+          {session.identity_words && (
+            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-1">
+              <div className="flex items-center gap-1.5 text-stone-600 text-[11px] font-bold uppercase tracking-wide">
+                <User className="w-3.5 h-3.5" />
+                Palabra(s) de Identidad
+              </div>
+              <p className="font-serif font-bold text-base text-stone-900">
+                {session.identity_words}
+              </p>
+            </div>
+          )}
+
           <div className="p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase font-bold text-emerald-800 tracking-wider">

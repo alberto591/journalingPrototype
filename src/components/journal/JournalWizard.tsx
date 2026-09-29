@@ -35,6 +35,9 @@ export const JournalWizard: React.FC = () => {
   const [silenceDuration, setSilenceDuration] = useState(
     journalDraft?.silence_duration_seconds || 60
   );
+  const [gratitudeItems, setGratitudeItems] = useState<string[]>(
+    todayJournalSession?.gratitude_items || journalDraft?.gratitude_items || []
+  );
 
   // Movement 2 State
   const [freeWriting, setFreeWriting] = useState(
@@ -62,6 +65,12 @@ export const JournalWizard: React.FC = () => {
   );
 
   // Movement 5 State
+  const [visionSentence, setVisionSentence] = useState(
+    todayJournalSession?.vision_sentence || journalDraft?.vision_sentence || ''
+  );
+  const [identityWords, setIdentityWords] = useState(
+    todayJournalSession?.identity_words || journalDraft?.identity_words || ''
+  );
   const [actionType, setActionType] = useState<'action' | 'release'>(
     todayJournalSession?.action_type || journalDraft?.action_type || 'action'
   );
@@ -77,6 +86,7 @@ export const JournalWizard: React.FC = () => {
     saveJournalDraft({
       currentMovementStep: currentMovement,
       silence_duration_seconds: silenceDuration,
+      gratitude_items: gratitudeItems,
       free_writing_1m: freeWriting,
       deep_writing_10m: deepWriting,
       focus_prompt_id: focusPrompt.id,
@@ -85,12 +95,15 @@ export const JournalWizard: React.FC = () => {
       emotions: selectedEmotions,
       listening_notes: listeningNotes,
       listening_duration_seconds: listeningDuration,
+      vision_sentence: visionSentence,
+      identity_words: identityWords,
       action_type: actionType,
       action_commitment: actionCommitment,
     });
   }, [
     currentMovement,
     silenceDuration,
+    gratitudeItems,
     freeWriting,
     deepWriting,
     focusPrompt,
@@ -98,10 +111,13 @@ export const JournalWizard: React.FC = () => {
     selectedEmotions,
     listeningNotes,
     listeningDuration,
+    visionSentence,
+    identityWords,
     actionType,
     actionCommitment,
     viewingSummary,
   ]);
+
 
   const handleFinishSession = async () => {
     setIsSaving(true);
@@ -109,6 +125,7 @@ export const JournalWizard: React.FC = () => {
       date: new Date().toISOString().split('T')[0],
       breathing_completed: true,
       silence_duration_seconds: silenceDuration,
+      gratitude_items: gratitudeItems,
       free_writing_1m: freeWriting,
       deep_writing_10m: deepWriting,
       focus_prompt_id: focusPrompt.id,
@@ -117,6 +134,8 @@ export const JournalWizard: React.FC = () => {
       emotions: selectedEmotions,
       listening_notes: listeningNotes,
       listening_duration_seconds: listeningDuration,
+      vision_sentence: visionSentence,
+      identity_words: identityWords,
       action_type: actionType,
       action_commitment: actionCommitment,
       total_duration_minutes: 30,
@@ -201,11 +220,13 @@ export const JournalWizard: React.FC = () => {
 
       {/* Dynamic Movement View */}
       {currentMovement === 1 && (
-        <MovementSlowDown 
+        <MovementSlowDown
+          gratitudeItems={gratitudeItems}
+          setGratitudeItems={setGratitudeItems}
           onComplete={() => {
             setBreathingDone(true);
             setCurrentMovement(2);
-          }} 
+          }}
         />
       )}
 
@@ -243,6 +264,10 @@ export const JournalWizard: React.FC = () => {
 
       {currentMovement === 5 && (
         <MovementAct
+          visionSentence={visionSentence}
+          setVisionSentence={setVisionSentence}
+          identityWords={identityWords}
+          setIdentityWords={setIdentityWords}
           actionType={actionType}
           setActionType={setActionType}
           actionCommitment={actionCommitment}
