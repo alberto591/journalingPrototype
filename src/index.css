@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sand-bg: #FAF8F5;
+    --card-bg: #FFFFFF;
+    --border-subtle: #EBE5D9;
+    --text-primary: #1C1917;
+    --text-secondary: #57534E;
+    --accent-bronze: #B66E43;
+  }
+
+  body {
+    background-color: var(--sand-bg);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #DDD4C3;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #C7B9A3;
+  }
+}
+
+@layer components {
+  .travesia-card {
+    @apply bg-white rounded-2xl border border-sand-200/80 shadow-card transition-all duration-200;
+  }
+
+  .travesia-card-interactive {
+    @apply bg-white rounded-2xl border border-sand-200/80 shadow-card hover:shadow-card-hover hover:border-sand-300 transition-all duration-200;
+  }
+
+  .travesia-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-stone-900 hover:bg-stone-800 active:scale-[0.98] transition-all duration-150 shadow-sm disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .travesia-btn-accent {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-bronze-600 hover:bg-bronze-700 active:scale-[0.98] transition-all duration-150 shadow-sm disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .travesia-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm text-stone-700 bg-sand-100 hover:bg-sand-200 border border-sand-200 active:scale-[0.98] transition-all duration-150;
+  }
+
+  .travesia-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium text-sm text-stone-600 hover:text-stone-900 hover:bg-stone-100/60 transition-all duration-150;
+  }
+
+  .editorial-title {
+    @apply font-serif tracking-tight text-stone-900;
+  }
+}
