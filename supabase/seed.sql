@@ -3,6 +3,17 @@
 -- Canonical Production Prompt Catalog, Channels, Modules & Books
 -- ====================================================================
 
+-- 0. PRICING PLANS (Mandatory for handle_new_user signup trigger)
+INSERT INTO public.pricing_plans (id, name, description, price_monthly, price_annual, features, is_active)
+VALUES 
+  ('trial', 'Prueba de 7 Días', 'Acceso completo a la experiencia guiada de 7 días', 0.00, 0.00, ARRAY['7 días de reto guiado', 'Acceso a sesiones en vivo', 'Comunidad de silencio'], true),
+  ('founding', 'Miembro Fundador', 'Tarifa protegida de por vida para los primeros 20 miembros', 29.00, 290.00, ARRAY['Precio protegido de por vida', 'Acceso diario a directos Zoom', 'Archivo completo de grabaciones', 'Comunidad y directos'], true),
+  ('standard', 'Membresía Mensual', 'Acceso completo mensual a Travesía', 39.00, 390.00, ARRAY['Acceso diario a directos Zoom', 'Archivo completo de grabaciones', 'Comunidad y biblioteca'], true)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  price_monthly = EXCLUDED.price_monthly,
+  price_annual = EXCLUDED.price_annual;
+
 -- 1. CHANNELS (Auto-generated UUIDs, idempotent insertion)
 INSERT INTO channels (slug, name, description, icon_name, order_index)
 SELECT v.slug, v.name, v.description, v.icon_name, v.order_index
@@ -63,3 +74,27 @@ FROM (VALUES
 WHERE NOT EXISTS (
   SELECT 1 FROM daily_prompts dp WHERE dp.prompt_text = v.prompt_text
 );
+
+-- 5. READ POLICIES (Allow both authenticated and public visitors to read public catalog items)
+DO $$
+BEGIN
+  -- Channels read policy
+  DROP POLICY IF EXISTS "Channels viewable by everyone" ON public.channels;
+  CREATE POLICY "Channels viewable by everyone" ON public.channels FOR SELECT USING (true);
+
+  -- Pricing plans read policy
+  DROP POLICY IF EXISTS "Pricing plans viewable by everyone" ON public.pricing_plans;
+  CREATE POLICY "Pricing plans viewable by everyone" ON public.pricing_plans FOR SELECT USING (true);
+
+  -- Emotions read policy
+  DROP POLICY IF EXISTS "Emotions viewable by everyone" ON public.emotions;
+  CREATE POLICY "Emotions viewable by everyone" ON public.emotions FOR SELECT USING (true);
+
+  -- Daily prompts read policy
+  DROP POLICY IF EXISTS "Daily prompts viewable by everyone" ON public.daily_prompts;
+  CREATE POLICY "Daily prompts viewable by everyone" ON public.daily_prompts FOR SELECT USING (true);
+
+  -- Four week cycles read policy
+  DROP POLICY IF EXISTS "Four week cycles viewable by everyone" ON public.four_week_cycles;
+  CREATE POLICY "Four week cycles viewable by everyone" ON public.four_week_cycles FOR SELECT USING (true);
+END $$;
