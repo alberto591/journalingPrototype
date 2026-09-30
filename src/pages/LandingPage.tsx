@@ -625,10 +625,6 @@ export const LandingPage: React.FC = () => {
                 a: 'Nunca. Tu diario está blindado técnicamente con Row Level Security a nivel de base de datos. Ningún otro usuario ni administrador tiene acceso a tus textos íntimos.',
               },
               {
-                q: '¿Es esto una religión o secta?',
-                a: 'No. Es un gimnasio de claridad personal fundamentado en la tradición milenaria del examen de conciencia, la sobriedad y la acción deliberada. Acoge a creyentes y a personas que buscan silencio en su vida.',
-              },
-              {
                 q: '¿Puedo cancelar en cualquier momento?',
                 a: 'Sí, con un solo clic desde tu perfil. Sin llamadas, sin trucos ni periodos de permanencia.',
               },
