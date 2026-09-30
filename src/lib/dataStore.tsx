@@ -36,6 +36,8 @@ import { eventsService } from '../services/eventsService';
 import { promptsService, getDeterministicDailyPrompt } from '../services/promptsService';
 import { adminService } from '../services/adminService';
 import { journeyService, INITIAL_ONGOING_CYCLES } from '../services/journeyService';
+import { recordingsService } from '../services/recordingsService';
+import { zoomService } from '../services/zoomService';
 
 interface DataStoreContextType {
   currentUser: Profile;
@@ -69,6 +71,9 @@ interface DataStoreContextType {
   nextUpcomingEvent: EventItem | null;
   toggleRegisterEvent: (eventId: string) => Promise<void>;
   addEvent: (event: Omit<EventItem, 'id' | 'attendees_count' | 'user_is_registered'>) => Promise<void>;
+  updateEvent: (eventId: string, updates: Partial<EventItem>) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
+  trackZoomJoinClick: (eventId: string) => Promise<void>;
 
   // Lessons
   lessons: Lesson[];
@@ -77,6 +82,9 @@ interface DataStoreContextType {
   // Library & Archive
   books: Book[];
   recordings: SessionRecording[];
+  uploadSessionRecording: (eventId: string, file: File, title?: string, description?: string, durationSeconds?: number) => Promise<{ recording: SessionRecording | null; error: string | null }>;
+  deleteSessionRecording: (recordingId: string, storagePath?: string, eventId?: string) => Promise<{ success: boolean; error: string | null }>;
+
 
   // Prompts & Daily Practice
   dailyPrompts: DailyPrompt[];
@@ -213,7 +221,14 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return saved ? JSON.parse(saved) : LESSONS_DATA;
   });
   const [books] = useState<Book[]>(BOOKS_DATA);
-  const [recordings] = useState<SessionRecording[]>(RECORDINGS_DATA);
+  const [recordings, setRecordings] = useState<SessionRecording[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}recordings`);
+      return saved ? JSON.parse(saved) : RECORDINGS_DATA;
+    } catch {
+      return RECORDINGS_DATA;
+    }
+  });
 
   const [dailyPrompts, setDailyPrompts] = useState<DailyPrompt[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}prompts`);
@@ -292,18 +307,20 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             setIsAuthenticated(false);
           }
 
-          // Fetch real channels, posts, prompts, events
-          const [chRes, pRes, prRes, evRes] = await Promise.all([
+          // Fetch real channels, posts, prompts, events, recordings
+          const [chRes, pRes, prRes, evRes, recRes] = await Promise.all([
             communityService.fetchChannels(),
             communityService.fetchPosts(),
             promptsService.fetchPrompts(),
             eventsService.fetchEvents(currentUser.id),
+            recordingsService.fetchRecordings(),
           ]);
 
           if (chRes.channels.length > 0) setChannels(chRes.channels);
           if (pRes.posts.length > 0) setPosts(pRes.posts);
           if (prRes.prompts.length > 0) setDailyPrompts(prRes.prompts);
           if (evRes.events.length > 0) setEvents(evRes.events);
+          if (recRes.recordings.length > 0) setRecordings(recRes.recordings);
 
           // Fetch real private journal sessions for user
           if (currentUser.id) {
@@ -330,8 +347,17 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [posts]);
 
   useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}events`, JSON.stringify(events));
+  }, [events]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}recordings`, JSON.stringify(recordings));
+  }, [recordings]);
+
+  useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}journals_${currentUser.id}`, JSON.stringify(userJournalSessions));
   }, [userJournalSessions, currentUser.id]);
+
 
   // -------------------------------------------------------------
   // REAL DYNAMIC STATISTICS COMPUTATION
@@ -647,6 +673,82 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setEvents(prev => [newEvent, ...prev]);
   };
 
+  const updateEvent = async (eventId: string, updates: Partial<EventItem>) => {
+    await adminService.assertAdmin(currentUser.id);
+    if (isSupabaseConfigured) {
+      await eventsService.updateEvent(eventId, updates);
+    }
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...updates } : e));
+  };
+
+  const deleteEvent = async (eventId: string) => {
+    await adminService.assertAdmin(currentUser.id);
+    if (isSupabaseConfigured) {
+      await eventsService.deleteEvent(eventId);
+    }
+    setEvents(prev => prev.filter(e => e.id !== eventId));
+  };
+
+  const trackZoomJoinClick = async (eventId: string) => {
+    zoomService.trackZoomJoinClick(eventId, currentUser.id || 'anonymous');
+    if (currentUser.id) {
+      await eventsService.recordZoomJoinClick(eventId, currentUser.id);
+    }
+  };
+
+  const uploadSessionRecording = async (
+    eventId: string,
+    file: File,
+    title?: string,
+    description?: string,
+    durationSeconds?: number
+  ) => {
+    await adminService.assertAdmin(currentUser.id);
+    const targetEvent = events.find(e => e.id === eventId);
+    const recTitle = title || (targetEvent ? targetEvent.title : 'Sesión en Directo');
+    const recDesc = description || (targetEvent ? targetEvent.description : '');
+    const recDuration = durationSeconds || (targetEvent ? (targetEvent.duration_minutes || 35) * 60 : 2100);
+
+    const res = await recordingsService.uploadRecording({
+      eventId,
+      title: recTitle,
+      description: recDesc,
+      category: targetEvent?.theme || 'El Presente',
+      strategy: 'HOSTED',
+      file,
+      durationSeconds: recDuration,
+      uploadedByUserId: currentUser.id,
+    });
+
+    if (res.recording) {
+      setRecordings(prev => [res.recording!, ...prev.filter(r => r.event_id !== eventId)]);
+      setEvents(prev => prev.map(e => e.id === eventId ? {
+        ...e,
+        recording_id: res.recording!.id,
+        recording_url: res.recording!.storage_path,
+      } : e));
+    }
+
+    return res;
+  };
+
+  const deleteSessionRecording = async (recordingId: string, storagePath?: string, eventId?: string) => {
+    await adminService.assertAdmin(currentUser.id);
+    const res = await recordingsService.deleteRecording(recordingId, storagePath);
+    if (res.success) {
+      setRecordings(prev => prev.filter(r => r.id !== recordingId));
+      if (eventId) {
+        setEvents(prev => prev.map(e => e.id === eventId ? {
+          ...e,
+          recording_id: undefined,
+          recording_url: undefined,
+        } : e));
+      }
+    }
+    return res;
+  };
+
+
   // -------------------------------------------------------------
   // LESSONS
   // -------------------------------------------------------------
@@ -779,10 +881,16 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         nextUpcomingEvent,
         toggleRegisterEvent,
         addEvent,
+        updateEvent,
+        deleteEvent,
+        trackZoomJoinClick,
         lessons,
         completeLesson,
         books,
         recordings,
+        uploadSessionRecording,
+        deleteSessionRecording,
+
         dailyPrompts,
         todayPrompt,
         addDailyPrompt,

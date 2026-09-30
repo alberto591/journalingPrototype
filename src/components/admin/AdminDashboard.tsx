@@ -1,12 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDataStore } from '../../lib/dataStore';
-import { DailyPrompt, EventItem, Profile, ContentItem, ContentPlatform, ContentStatus, BusinessSettings, Lead, FeedbackResponse, CustomerInterview, ProductLogEntry } from '../../types';
+import { 
+  DailyPrompt, 
+  EventItem, 
+  Profile, 
+  ContentItem, 
+  ContentPlatform, 
+  ContentStatus, 
+  BusinessSettings, 
+  Lead, 
+  FeedbackResponse, 
+  CustomerInterview, 
+  ProductLogEntry,
+  SessionRecording 
+} from '../../types';
 import { businessService, DEFAULT_BUSINESS_SETTINGS } from '../../services/businessService';
 import { contentService } from '../../services/contentService';
 import { leadService } from '../../services/leadService';
 import { feedbackService } from '../../services/feedbackService';
 import { interviewAndLogService } from '../../services/interviewAndLogService';
 import { CustomerInterviewModal } from './CustomerInterviewModal';
+import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
+import { zoomService } from '../../services/zoomService';
 import { 
   Shield, 
   Users, 
@@ -35,7 +50,12 @@ import {
   Lightbulb,
   Check,
   XCircle,
-  FileText
+  FileText,
+  Upload,
+  Edit2,
+  PlayCircle,
+  Loader2,
+  Link2
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -45,11 +65,16 @@ export const AdminDashboard: React.FC = () => {
     posts, 
     comments, 
     events, 
+    recordings,
     dailyPrompts, 
     journalSessions,
     addDailyPrompt, 
     toggleDailyPromptActive, 
     addEvent,
+    updateEvent,
+    deleteEvent,
+    uploadSessionRecording,
+    deleteSessionRecording,
     ongoingCycles,
     currentCommunityCycle,
     currentGlobalCommunityWeek,
@@ -57,6 +82,7 @@ export const AdminDashboard: React.FC = () => {
     addOngoingCycle,
     updateOngoingCycle
   } = useDataStore();
+
 
   const [activeTab, setActiveTab] = useState<'business' | 'cycles' | 'founding_members' | 'product_log' | 'content' | 'prompts' | 'events' | 'settings'>('business');
 
@@ -97,17 +123,26 @@ export const AdminDashboard: React.FC = () => {
   const [newPromptWeek, setNewPromptWeek] = useState(1);
   const [newPromptDifficulty, setNewPromptDifficulty] = useState<any>('profundo');
 
-  // New event state
+  // New event state (8 required fields: Título, Fecha, Hora, Duración, Tema, Descripción, Facilitador, Zoom URL)
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventDate, setNewEventDate] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
-  const [newEventDuration, setNewEventDuration] = useState(30);
-  const [newEventType, setNewEventType] = useState<'standard' | 'coaching'>('standard');
+  const [newEventDuration, setNewEventDuration] = useState(35);
+  const [newEventTheme, setNewEventTheme] = useState('El Presente');
   const [newEventDescription, setNewEventDescription] = useState('');
-  const [newEventMeetingUrl, setNewEventMeetingUrl] = useState('https://meet.google.com/travesia-vivo');
-  const [newEventTopic, setNewEventTopic] = useState('');
+  const [newEventHost, setNewEventHost] = useState(currentUser.name || 'Alberto Calvo');
+  const [newEventZoomUrl, setNewEventZoomUrl] = useState('');
+  const [newEventType, setNewEventType] = useState<'standard' | 'coaching'>('standard');
   const [newEventPrompt, setNewEventPrompt] = useState('');
-  const [newEventRecordingUrl, setNewEventRecordingUrl] = useState('');
+
+  // Selected session and recording states
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [isUploadingRecording, setIsUploadingRecording] = useState<boolean>(false);
+  const [uploadingSessionId, setUploadingSessionId] = useState<string | null>(null);
+  const [previewRecording, setPreviewRecording] = useState<SessionRecording | null>(null);
+  const recordingFileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   // New content state
   const [newContentTitle, setNewContentTitle] = useState('');
@@ -167,32 +202,175 @@ export const AdminDashboard: React.FC = () => {
     triggerSuccessFeedback('Pregunta de enfoque creada en el motor.');
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEventTitle.trim()) return;
-
-    addEvent({
-      title: newEventTitle.trim(),
-      date: newEventDate ? new Date(newEventDate).toISOString() : new Date().toISOString(),
-      time_display: newEventTime || '07:00 AM (CET)',
-      duration_minutes: newEventDuration,
-      type: newEventType,
-      host_name: currentUser.name,
-      host_avatar: currentUser.avatar_url,
-      description: newEventDescription || 'Sesión en vivo de discernimiento y práctica matutina.',
-      meeting_url: newEventMeetingUrl,
-      status: 'upcoming',
-      recording_url: newEventRecordingUrl || undefined,
-    });
-
+  const resetEventForm = () => {
     setNewEventTitle('');
     setNewEventDate('');
     setNewEventTime('');
+    setNewEventDuration(35);
+    setNewEventTheme('El Presente');
+    setNewEventDescription('');
+    setNewEventHost(currentUser.name || 'Alberto Calvo');
+    setNewEventZoomUrl('');
     setNewEventPrompt('');
-    setNewEventRecordingUrl('');
+    setEditingEvent(null);
     setShowAddEventModal(false);
-    triggerSuccessFeedback('Sesión en directo programada.');
   };
+
+  const handleOpenCreateEvent = () => {
+    resetEventForm();
+    setShowAddEventModal(true);
+  };
+
+  const handleOpenEditEvent = (evt: EventItem) => {
+    setEditingEvent(evt);
+    setNewEventTitle(evt.title);
+    setNewEventDate(evt.date ? evt.date.split('T')[0] : '');
+    setNewEventTime(evt.time_display || '08:00 AM CET');
+    setNewEventDuration(evt.duration_minutes || 35);
+    setNewEventTheme(evt.theme || evt.weekly_theme || 'El Presente');
+    setNewEventDescription(evt.description || '');
+    setNewEventHost(evt.host_name || currentUser.name);
+    setNewEventZoomUrl(evt.meeting_url || evt.zoom_meeting_url || '');
+    setNewEventPrompt(evt.prompt || '');
+    setShowAddEventModal(true);
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEventTitle.trim()) return;
+
+    const eventDate = newEventDate ? new Date(newEventDate).toISOString() : new Date().toISOString();
+    const timeDisplay = newEventTime.trim() || '08:00 AM CET';
+    const zoomUrl = newEventZoomUrl.trim();
+
+    if (editingEvent) {
+      await updateEvent(editingEvent.id, {
+        title: newEventTitle.trim(),
+        date: eventDate,
+        time_display: timeDisplay,
+        duration_minutes: newEventDuration,
+        theme: newEventTheme.trim(),
+        weekly_theme: newEventTheme.trim(),
+        description: newEventDescription.trim(),
+        host_name: newEventHost.trim() || currentUser.name,
+        meeting_url: zoomUrl,
+        zoom_meeting_url: zoomUrl,
+        prompt: newEventPrompt.trim() || undefined,
+      });
+      triggerSuccessFeedback('Sesión actualizada correctamente.');
+    } else {
+      await addEvent({
+        title: newEventTitle.trim(),
+        date: eventDate,
+        time_display: timeDisplay,
+        duration_minutes: newEventDuration,
+        type: newEventType,
+        theme: newEventTheme.trim(),
+        weekly_theme: newEventTheme.trim(),
+        host_name: newEventHost.trim() || currentUser.name,
+        host_avatar: currentUser.avatar_url,
+        description: newEventDescription.trim() || 'Sesión en vivo de discernimiento y práctica matutina.',
+        meeting_url: zoomUrl,
+        zoom_meeting_url: zoomUrl,
+        prompt: newEventPrompt.trim() || undefined,
+        status: 'upcoming',
+      });
+      triggerSuccessFeedback('Nueva sesión creada y guardada en Supabase.');
+    }
+
+    resetEventForm();
+  };
+
+  const handleDeleteEventClick = async (eventId: string) => {
+    if (!confirm('¿Seguro que deseas eliminar esta sesión?')) return;
+    await deleteEvent(eventId);
+    if (selectedSessionId === eventId) {
+      setSelectedSessionId(null);
+    }
+    triggerSuccessFeedback('Sesión eliminada.');
+  };
+
+  const handleTriggerUpload = (sessionId: string) => {
+    setUploadingSessionId(sessionId);
+    if (recordingFileInputRef.current) {
+      recordingFileInputRef.current.value = '';
+      recordingFileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingSessionId) return;
+
+    if (!file.name.toLowerCase().endsWith('.mp4')) {
+      alert('Por favor, selecciona un archivo de vídeo MP4 válido.');
+      return;
+    }
+
+    setIsUploadingRecording(true);
+    const targetSession = events.find(ev => ev.id === uploadingSessionId);
+    try {
+      const { recording, error } = await uploadSessionRecording(
+        uploadingSessionId,
+        file,
+        targetSession?.title,
+        targetSession?.description,
+        (targetSession?.duration_minutes || 35) * 60
+      );
+
+      if (error) {
+        alert(error);
+      } else {
+        triggerSuccessFeedback('Grabación MP4 subida exitosamente al almacenamiento privado.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error al procesar la subida.');
+    } finally {
+      setIsUploadingRecording(false);
+      setUploadingSessionId(null);
+    }
+  };
+
+  const handleDeleteRecordingClick = async (eventItem: EventItem) => {
+    const matchedRec = recordings.find(r => r.event_id === eventItem.id || r.id === eventItem.recording_id || r.storage_path === eventItem.recording_url);
+    const recordingId = matchedRec ? matchedRec.id : (eventItem.recording_id || `rec-${eventItem.id}`);
+    const storagePath = matchedRec ? matchedRec.storage_path : eventItem.recording_url;
+
+    if (!confirm('¿Deseas eliminar la grabación MP4 de esta sesión? Se eliminará del bucket privado.')) return;
+
+    const { success, error } = await deleteSessionRecording(recordingId, storagePath, eventItem.id);
+    if (error) {
+      alert(error);
+    } else {
+      triggerSuccessFeedback('Grabación eliminada de Supabase Storage.');
+    }
+  };
+
+  const handlePreviewRecordingClick = (eventItem: EventItem) => {
+    const matchedRec = recordings.find(r => r.event_id === eventItem.id || r.id === eventItem.recording_id || r.storage_path === eventItem.recording_url);
+    if (matchedRec) {
+      setPreviewRecording(matchedRec);
+    } else if (eventItem.recording_url) {
+      setPreviewRecording({
+        id: eventItem.recording_id || `rec-${eventItem.id}`,
+        event_id: eventItem.id,
+        title: eventItem.title,
+        description: eventItem.description || '',
+        date: eventItem.date,
+        duration: `${eventItem.duration_minutes || 35} min`,
+        duration_seconds: (eventItem.duration_minutes || 35) * 60,
+        category: eventItem.theme || 'El Presente',
+        recording_strategy: 'HOSTED',
+        storage_path: eventItem.recording_url,
+        status: 'AVAILABLE',
+        uploaded_by: currentUser.id,
+        uploaded_at: new Date().toISOString(),
+        views_count: 0,
+        is_member_only: true,
+      } as SessionRecording);
+    }
+  };
+
 
   const handleCreateProductLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1222,57 +1400,293 @@ export const AdminDashboard: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       {/* TAB 4: LIVE SESSIONS MANAGEMENT                                */}
       {/* ------------------------------------------------------------- */}
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 4: SESIONES & RECORDINGS MANAGEMENT                        */}
+      {/* ------------------------------------------------------------- */}
       {activeTab === 'events' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif font-bold text-lg text-stone-900">
-              Sesiones Matutinas y Encuentros en Vivo
-            </h3>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif font-bold text-xl text-stone-900">
+                Sesiones en Directo y Grabaciones
+              </h3>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Crea la reunión en Zoom, pega la URL de la sesión y sube la grabación MP4 tras la sesión.
+              </p>
+            </div>
             <button
-              onClick={() => setShowAddEventModal(true)}
-              className="travesia-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
+              onClick={handleOpenCreateEvent}
+              className="travesia-btn-primary text-xs py-2.5 px-4 flex items-center gap-1.5 shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Programar Sesión</span>
+              <span>Crear Sesión</span>
             </button>
           </div>
 
-          <div className="space-y-3">
-            {events.map(event => (
-              <div key={event.id} className="travesia-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sand-200 text-stone-700">
-                      {event.time_display} · {event.duration_minutes}m
-                    </span>
-                    <span className="text-xs text-stone-500">
-                      {event.attendees_count} inscritos
-                    </span>
-                  </div>
-                  <h4 className="font-serif font-bold text-base text-stone-900">
-                    {event.title}
-                  </h4>
-                  <p className="text-xs text-stone-600 line-clamp-1">
-                    {event.description}
-                  </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* SESSIONS LIST */}
+            <div className="lg:col-span-2 space-y-3">
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-600">
+                Listado de Sesiones ({events.length})
+              </h4>
+              {events.length === 0 ? (
+                <div className="travesia-card p-8 text-center text-stone-500 bg-sand-50/50 border-dashed border-sand-300">
+                  <p className="text-xs font-semibold">No hay sesiones creadas todavía.</p>
                 </div>
+              ) : (
+                events.map(event => {
+                  const isSelected = selectedSessionId === event.id;
+                  const hasRecording = Boolean(
+                    event.recording_url || 
+                    recordings.some(r => r.event_id === event.id || r.id === event.recording_id)
+                  );
+                  const isZoom = zoomService.isValidZoomUrl(event.meeting_url || event.zoom_meeting_url);
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      if (event.meeting_url) window.open(event.meeting_url, '_blank');
-                    }}
-                    className="travesia-btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Enlace Sala</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+                  return (
+                    <div
+                      key={event.id}
+                      className={`travesia-card p-5 transition-all cursor-pointer border ${
+                        isSelected 
+                          ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/10' 
+                          : 'border-sand-200 hover:border-sand-300'
+                      }`}
+                      onClick={() => setSelectedSessionId(event.id)}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-sand-200 text-stone-700">
+                              {event.time_display} · {event.duration_minutes}m
+                            </span>
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                              Tema: {event.theme || event.weekly_theme || 'El Presente'}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                              hasRecording
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-stone-100 text-stone-500 border border-stone-200'
+                            }`}>
+                              {hasRecording ? '✓ Grabación disponible' : 'Sin grabación'}
+                            </span>
+                          </div>
+
+                          <h4 className="font-serif font-bold text-base text-stone-900 leading-snug">
+                            {event.title}
+                          </h4>
+
+                          <p className="text-xs text-stone-500 line-clamp-2">
+                            {event.description}
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-stone-500">
+                            <span>Facilitador: <strong className="text-stone-700">{event.host_name}</strong></span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Video className="w-3 h-3 text-stone-400" />
+                              {event.meeting_url ? (
+                                <span className={isZoom ? 'text-emerald-700 font-mono' : 'text-stone-600 truncate max-w-xs'}>
+                                  {isZoom ? 'Zoom URL válida' : 'URL asignada'}
+                                </span>
+                              ) : (
+                                <span className="text-rose-600 font-mono">Sin enlace Zoom</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex sm:flex-col items-center gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedSessionId(event.id)}
+                            className={`text-xs py-1 px-2.5 rounded-lg font-medium transition-all ${
+                              isSelected
+                                ? 'bg-amber-500 text-stone-950 font-bold'
+                                : 'bg-sand-100 text-stone-700 hover:bg-sand-200'
+                            }`}
+                          >
+                            {isSelected ? 'Seleccionada' : 'Seleccionar'}
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditEvent(event)}
+                            className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-sand-100"
+                            title="Editar sesión"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEventClick(event.id)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                            title="Eliminar sesión"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* SELECTED SESSION & RECORDINGS PANEL */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-600">
+                Detalle y Grabación MP4
+              </h4>
+
+              {(() => {
+                const activeSession = events.find(e => e.id === selectedSessionId) || events[0];
+                if (!activeSession) {
+                  return (
+                    <div className="travesia-card p-6 text-center text-stone-400 text-xs">
+                      Selecciona una sesión de la lista para gestionar su enlace Zoom o grabación.
+                    </div>
+                  );
+                }
+
+                const hasRecording = Boolean(
+                  activeSession.recording_url || 
+                  recordings.some(r => r.event_id === activeSession.id || r.id === activeSession.recording_id)
+                );
+
+                return (
+                  <div className="travesia-card p-5 space-y-5 bg-white border-sand-300 shadow-sm">
+                    {/* Header info */}
+                    <div className="space-y-2 border-b border-sand-100 pb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-sand-100 text-stone-700">
+                          {activeSession.date ? activeSession.date.split('T')[0] : 'Fecha no fijada'} · {activeSession.time_display}
+                        </span>
+                        <button
+                          onClick={() => handleOpenEditEvent(activeSession)}
+                          className="text-[11px] font-semibold text-stone-600 hover:text-stone-900 flex items-center gap-1"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
+                      </div>
+
+                      <h4 className="font-serif font-bold text-lg text-stone-900 leading-snug">
+                        {activeSession.title}
+                      </h4>
+
+                      <div className="text-xs text-stone-600 space-y-1">
+                        <p><strong>Tema:</strong> {activeSession.theme || activeSession.weekly_theme || 'El Presente'}</p>
+                        <p><strong>Duración:</strong> {activeSession.duration_minutes} min</p>
+                        <p><strong>Facilitador:</strong> {activeSession.host_name}</p>
+                        <p className="truncate">
+                          <strong>Zoom URL:</strong>{' '}
+                          {activeSession.meeting_url ? (
+                            <a
+                              href={activeSession.meeting_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-800 hover:underline font-mono"
+                            >
+                              {activeSession.meeting_url}
+                            </a>
+                          ) : (
+                            <span className="text-rose-600 italic">No asignada</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* SECTION: GRABACIÓN */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-serif font-bold text-sm text-stone-900 tracking-wide uppercase">
+                          GRABACIÓN
+                        </h5>
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                          hasRecording
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : 'bg-stone-100 text-stone-500'
+                        }`}>
+                          {hasRecording ? 'Grabación disponible' : 'Sin grabación'}
+                        </span>
+                      </div>
+
+                      {hasRecording ? (
+                        <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-3">
+                          <p className="text-xs text-emerald-950 font-medium leading-relaxed">
+                            Grabación MP4 almacenada en el bucket privado seguro (<code className="text-[11px] font-mono">session-recordings</code>). Los miembros activos o en prueba acceden mediante enlace firmado temporal.
+                          </p>
+                          {activeSession.recording_url && (
+                            <p className="text-[11px] font-mono text-stone-600 bg-white/70 p-2 rounded-lg border border-sand-200 truncate">
+                              Path: {activeSession.recording_url}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <button
+                              onClick={() => handlePreviewRecordingClick(activeSession)}
+                              className="travesia-btn-accent text-xs py-2 px-3.5 font-bold text-stone-950 flex items-center gap-1.5 shadow-sm"
+                            >
+                              <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
+                              <span>VER GRABACIÓN</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleTriggerUpload(activeSession.id)}
+                              disabled={isUploadingRecording}
+                              className="travesia-btn-secondary text-xs py-2 px-3 flex items-center gap-1 font-semibold"
+                            >
+                              {isUploadingRecording && uploadingSessionId === activeSession.id ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Subiendo...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-3.5 h-3.5 text-stone-600" />
+                                  <span>REEMPLAZAR GRABACIÓN</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteRecordingClick(activeSession)}
+                              className="text-xs py-2 px-3 rounded-xl font-medium text-rose-700 hover:bg-rose-50 flex items-center gap-1 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>ELIMINAR GRABACIÓN</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-5 rounded-2xl bg-sand-50 border border-sand-200 space-y-3">
+                          <p className="text-xs text-stone-600 leading-relaxed">
+                            Tras finalizar la sesión en Zoom, descarga el archivo de grabación en formato <strong>MP4</strong> y súbelo aquí. Se guardará en el bucket privado de Supabase Storage.
+                          </p>
+
+                          <button
+                            onClick={() => handleTriggerUpload(activeSession.id)}
+                            disabled={isUploadingRecording}
+                            className="travesia-btn-primary text-xs py-2.5 px-4 font-bold flex items-center gap-2 shadow-sm w-full justify-center"
+                          >
+                            {isUploadingRecording && uploadingSessionId === activeSession.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Subiendo MP4 al bucket privado...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                <span>SUBIR GRABACIÓN</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
+
 
       {/* ------------------------------------------------------------- */}
       {/* TAB 5: DAILY PROMPTS MOTOR (205 PROMPTS)                       */}
@@ -1654,131 +2068,165 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: ADD EVENT */}
+      {/* MODAL: ADD / EDIT SESSION */}
       {showAddEventModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-sand-200 space-y-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-sand-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-serif font-bold text-xl text-stone-900">
-              Programar Sesión Guiada en Directo
+              {editingEvent ? 'Editar Sesión' : 'Crear Sesión'}
             </h3>
+            <p className="text-xs text-stone-500">
+              Configura los detalles del encuentro en directo y pega el enlace de reunión creado manualmente en Zoom.
+            </p>
 
-            <form onSubmit={handleCreateEvent} className="space-y-3">
+            <form onSubmit={handleSaveEvent} className="space-y-3.5">
+              {/* 1. Título */}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">
-                  Título o Temática de la Sesión:
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Título:
                 </label>
                 <input
                   type="text"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
                   placeholder="Sesión diaria de journaling — Enfoque: Frenar la inercia"
-                  className="w-full p-3 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
                   required
                 />
               </div>
 
+              {/* 2. Fecha & 3. Hora */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Horario (Texto):
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Fecha:
+                  </label>
+                  <input
+                    type="date"
+                    value={newEventDate}
+                    onChange={(e) => setNewEventDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Hora:
                   </label>
                   <input
                     type="text"
                     value={newEventTime}
                     onChange={(e) => setNewEventTime(e.target.value)}
-                    placeholder="Mañana · 07:00 AM (CET)"
-                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
+                    placeholder="08:00 AM CET"
+                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                    required
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Tipo de Sesión:
-                  </label>
-                  <select
-                    value={newEventType}
-                    onChange={(e) => setNewEventType(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
-                  >
-                    <option value="standard">Journaling Matutino (30m)</option>
-                    <option value="coaching">Mentoría Grupal (60m)</option>
-                  </select>
-                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">
-                  Prompt o Pregunta Central de la Sesión:
-                </label>
-                <input
-                  type="text"
-                  value={newEventPrompt}
-                  onChange={(e) => setNewEventPrompt(e.target.value)}
-                  placeholder="¿Qué distracción externa estás usando para evitar estar a solas contigo?"
-                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
-                />
-              </div>
-
+              {/* 4. Duración & 5. Tema */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Enlace de Sala (Google Meet / Zoom):
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Duración (minutos):
                   </label>
                   <input
-                    type="text"
-                    value={newEventMeetingUrl}
-                    onChange={(e) => setNewEventMeetingUrl(e.target.value)}
-                    placeholder="https://meet.google.com/travesia-vivo"
-                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
+                    type="number"
+                    value={newEventDuration}
+                    onChange={(e) => setNewEventDuration(Number(e.target.value))}
+                    min={10}
+                    max={180}
+                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Grabación (Tras la sesión):
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Tema:
                   </label>
                   <input
                     type="text"
-                    value={newEventRecordingUrl}
-                    onChange={(e) => setNewEventRecordingUrl(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=... o Loom"
-                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
+                    value={newEventTheme}
+                    onChange={(e) => setNewEventTheme(e.target.value)}
+                    placeholder="El Presente / La Visión / ..."
+                    className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                    required
                   />
                 </div>
               </div>
 
+              {/* 6. Descripción */}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Descripción:
                 </label>
                 <textarea
                   value={newEventDescription}
                   onChange={(e) => setNewEventDescription(e.target.value)}
-                  placeholder="Temática central de la sesión y dinámicas..."
+                  placeholder="Temática central de la sesión, objetivos y dinámicas de quietud..."
                   rows={2}
-                  className="w-full p-3 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
                 />
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
+              {/* 7. Facilitador */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Facilitador:
+                </label>
+                <input
+                  type="text"
+                  value={newEventHost}
+                  onChange={(e) => setNewEventHost(e.target.value)}
+                  placeholder="Alberto Calvo"
+                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                  required
+                />
+              </div>
+
+              {/* 8. Zoom URL */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Zoom URL (pega aquí el enlace de Zoom creado manualmente):
+                </label>
+                <input
+                  type="url"
+                  value={newEventZoomUrl}
+                  onChange={(e) => setNewEventZoomUrl(e.target.value)}
+                  placeholder="https://zoom.us/j/1234567890?pwd=..."
+                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400 font-mono"
+                  required
+                />
+                {newEventZoomUrl && !zoomService.isValidZoomUrl(newEventZoomUrl) && (
+                  <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 text-amber-600" />
+                    <span>Aviso: La URL introducida no parece ser un dominio legítimo de Zoom (*.zoom.us).</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-sand-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddEventModal(false)}
+                  onClick={resetEventForm}
                   className="travesia-btn-secondary text-xs"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="travesia-btn-primary text-xs py-2 px-5"
+                  className="travesia-btn-primary text-xs py-2 px-5 font-bold"
                 >
-                  Programar Sesión
+                  {editingEvent ? 'Guardar Cambios' : 'Crear Sesión'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* MODAL: CUSTOMER INTERVIEW (10 QUESTIONS) */}
       <CustomerInterviewModal
@@ -1969,6 +2417,23 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Hidden MP4 file input for manual recording upload */}
+      <input
+        ref={recordingFileInputRef}
+        type="file"
+        accept="video/mp4,video/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Recording Player Modal */}
+      <RecordingPlayerModal
+        recording={previewRecording}
+        isOpen={Boolean(previewRecording)}
+        onClose={() => setPreviewRecording(null)}
+      />
     </div>
   );
 };
+

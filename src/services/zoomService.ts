@@ -10,6 +10,8 @@
  * without exposing Zoom credentials or secrets on the frontend.
  */
 
+import { ZoomJoinClick } from '../types';
+
 export interface ZoomMeetingParams {
   topic: string;
   startTime: string; // ISO string
@@ -42,6 +44,9 @@ export interface ZoomWebhookResult {
 
 // Feature flag: by default false for MVP
 const ZOOM_API_AUTOMATION_ENABLED = false;
+
+// Memory fallback for Node/test environments
+let inMemoryZoomClicks: ZoomJoinClick[] = [];
 
 export const zoomService = {
   /**
@@ -99,6 +104,68 @@ export const zoomService = {
     }
     return trimmed;
   },
+
+  /**
+   * Reset in-memory tracked clicks (for testing)
+   */
+  clearZoomJoinClicks(): void {
+
+    inMemoryZoomClicks = [];
+    try {
+      const storage = typeof localStorage !== 'undefined' 
+        ? localStorage 
+        : (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null);
+      storage?.removeItem('travesia_zoom_join_clicks');
+    } catch {}
+  },
+
+  /**
+   * Track member click on 'ENTRAR EN ZOOM'
+   * Note: This tracks the join intent click and is explicitly NOT counted as attendance.
+   */
+  trackZoomJoinClick(eventId: string, userId: string): ZoomJoinClick {
+    const click: ZoomJoinClick = {
+      id: `zjc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      event_id: eventId,
+      user_id: userId,
+      clicked_at: new Date().toISOString(),
+      interaction_type: 'zoom_join_clicked',
+      label: 'Intentó unirse',
+    };
+
+    inMemoryZoomClicks.push(click);
+
+    try {
+      const storage = typeof localStorage !== 'undefined' 
+        ? localStorage 
+        : (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null);
+      if (storage) {
+        const existing = storage.getItem('travesia_zoom_join_clicks');
+        const list = existing ? JSON.parse(existing) : [];
+        list.push(click);
+        storage.setItem('travesia_zoom_join_clicks', JSON.stringify(list));
+      }
+    } catch {}
+
+    return click;
+  },
+
+  getZoomJoinClicks(eventId?: string): ZoomJoinClick[] {
+    try {
+      const storage = typeof localStorage !== 'undefined' 
+        ? localStorage 
+        : (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null);
+      if (storage) {
+        const existing = storage.getItem('travesia_zoom_join_clicks');
+        if (existing) {
+          const list: ZoomJoinClick[] = JSON.parse(existing);
+          return eventId ? list.filter(c => c.event_id === eventId) : list;
+        }
+      }
+    } catch {}
+    return eventId ? inMemoryZoomClicks.filter(c => c.event_id === eventId) : [...inMemoryZoomClicks];
+  },
+
 
   /**
    * FUTURE READY: Create Zoom meeting automatically via backend worker

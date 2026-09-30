@@ -39,6 +39,28 @@ const STORAGE_BUCKET = 'session-recordings';
 
 export const recordingsService = {
   /**
+   * Fetch session recordings from Supabase session_recordings table
+   */
+  async fetchRecordings(): Promise<{ recordings: SessionRecording[]; error: string | null }> {
+    if (!isSupabaseConfigured) {
+      return { recordings: [], error: null };
+    }
+    try {
+      const { data, error } = await supabase
+        .from('session_recordings')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return { recordings: [], error: error.message };
+      }
+      return { recordings: (data || []) as SessionRecording[], error: null };
+    } catch (err: any) {
+      return { recordings: [], error: err?.message || 'Error al obtener grabaciones.' };
+    }
+  },
+
+  /**
    * Verify if a user is permitted to view a member recording
    * Rules:
    * 1. Unauthenticated (null user) => DENIED
@@ -179,17 +201,19 @@ export const recordingsService = {
       return { recording: null, error: 'Formato no soportado. Sube un archivo MP4, MOV o WEBM.' };
     }
 
-    const storagePath = `session-recordings/${eventId}/recording.${fileExt}`;
+    const recordingId = `rec-${Date.now()}`;
+    const relativeStoragePath = `${eventId}/${recordingId}.${fileExt}`;
+    const fullStoragePath = `session-recordings/${eventId}/${recordingId}.${fileExt}`;
 
     try {
       if (isSupabaseConfigured) {
-        onProgress?.(25, 'Subiendo grabación... 25%');
+        onProgress?.(25, 'Subiendo grabación al almacenamiento privado... 25%');
         
         const { error: uploadError } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .upload(storagePath, file, {
+          .upload(relativeStoragePath, file, {
             upsert: true,
-            contentType: file.type,
+            contentType: file.type || 'video/mp4',
           });
 
         if (uploadError) {
@@ -197,7 +221,33 @@ export const recordingsService = {
           return { recording: null, error: `Error al subir al bucket de almacenamiento: ${uploadError.message}` };
         }
 
-        onProgress?.(75, 'Subiendo grabación... 75%');
+        onProgress?.(75, 'Grabación subida. Registrando metadatos en Supabase... 75%');
+
+        // Store metadata in session_recordings table
+        try {
+          await supabase.from('session_recordings').insert({
+            id: recordingId,
+            event_id: eventId,
+            title: title.trim(),
+            description: description.trim(),
+            storage_path: fullStoragePath,
+            file_size_bytes: file.size,
+            duration_seconds: durationSeconds,
+            duration: `${Math.floor(durationSeconds / 60)} min`,
+            category,
+            recording_strategy: 'HOSTED',
+            status: 'AVAILABLE',
+            uploaded_by: uploadedByUserId,
+            is_member_only: true,
+          });
+
+          // Update event in Supabase
+          await supabase.from('events').update({
+            recording_url: fullStoragePath,
+          }).eq('id', eventId);
+        } catch {
+          // Table insert fallback for local/mock
+        }
       } else {
         // Simulated progress for demo / local environment
         onProgress?.(20, 'Subiendo grabación... 20%');
@@ -213,7 +263,7 @@ export const recordingsService = {
       onProgress?.(100, 'Grabación disponible.');
 
       const newRec: SessionRecording = {
-        id: `rec-${eventId}-${Date.now()}`,
+        id: recordingId,
         event_id: eventId,
         title: title.trim(),
         description: description.trim(),
@@ -223,9 +273,9 @@ export const recordingsService = {
         file_size_bytes: file.size,
         category,
         recording_strategy: 'HOSTED',
-        storage_path: storagePath,
+        storage_path: fullStoragePath,
         thumbnail_url: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
-        video_url: URL.createObjectURL ? URL.createObjectURL(file) : undefined,
+        video_url: typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : undefined,
         zoom_recording_url: zoomRecordingUrl?.trim() || undefined,
         status: 'AVAILABLE',
         uploaded_by: uploadedByUserId,
@@ -238,6 +288,24 @@ export const recordingsService = {
     } catch (err: any) {
       return { recording: null, error: err?.message || 'Error inesperado durante la subida.' };
     }
+  },
+
+  /**
+   * Delete a recording from private bucket and database metadata
+   */
+  async deleteRecording(recordingId: string, storagePath?: string): Promise<{ success: boolean; error: string | null }> {
+    if (isSupabaseConfigured) {
+      try {
+        if (storagePath) {
+          const cleanPath = storagePath.replace(/^session-recordings\//, '');
+          await supabase.storage.from(STORAGE_BUCKET).remove([cleanPath]);
+        }
+        await supabase.from('session_recordings').delete().eq('id', recordingId);
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Error al eliminar grabación.' };
+      }
+    }
+    return { success: true, error: null };
   },
 
   /**

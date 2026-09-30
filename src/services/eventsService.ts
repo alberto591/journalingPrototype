@@ -143,6 +143,56 @@ export const eventsService = {
       }
     },
 
+  // Update event (Admin)
+  async updateEvent(id: string, updates: Partial<EventItem>): Promise<{ event: EventItem | null; error: string | null }> {
+    if (isSupabaseConfigured) {
+      try {
+        const payload: any = {};
+        if (updates.title !== undefined) payload.title = updates.title;
+        if (updates.description !== undefined) payload.description = updates.description;
+        if (updates.date !== undefined) payload.date = updates.date;
+        if (updates.duration_minutes !== undefined) payload.duration_minutes = updates.duration_minutes;
+        if (updates.host_name !== undefined) payload.host_name = updates.host_name;
+        if (updates.meeting_url !== undefined || updates.zoom_meeting_url !== undefined) {
+          payload.meeting_url = updates.zoom_meeting_url || updates.meeting_url;
+          payload.zoom_meeting_url = updates.zoom_meeting_url || updates.meeting_url;
+        }
+        if (updates.theme !== undefined || updates.weekly_theme !== undefined) {
+          payload.theme = updates.theme || updates.weekly_theme;
+        }
+        if (updates.recording_url !== undefined) payload.recording_url = updates.recording_url;
+
+        const { data, error } = await supabase
+          .from('events')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) {
+          return { event: null, error: error.message };
+        }
+        return { event: data as EventItem, error: null };
+      } catch (err: any) {
+        return { event: null, error: err?.message || 'Error al actualizar evento.' };
+      }
+    }
+    return { event: updates as EventItem, error: null };
+  },
+
+  // Delete event (Admin)
+  async deleteEvent(id: string): Promise<{ success: boolean; error: string | null }> {
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        return { success: !error, error: error ? error.message : null };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Error al eliminar evento.' };
+      }
+    }
+    return { success: true, error: null };
+  },
+
   // Track Zoom join button click (join_click, NOT attendance)
   async recordZoomJoinClick(eventId: string, userId: string): Promise<void> {
     if (!eventId || !userId) return;
@@ -162,7 +212,7 @@ export const eventsService = {
             user_id: userId,
             event_name: 'zoom_join_clicked',
             source: 'events_view',
-            metadata: { event_id: eventId, interaction_type: 'join_click' },
+            metadata: { event_id: eventId, interaction_type: 'zoom_join_clicked' },
           });
       } catch {
         // Non-blocking telemetry

@@ -236,12 +236,14 @@ export interface EventItem {
   host_name: string;
   host_avatar: string;
   weekly_theme?: string;
+  theme?: string;
   prompt?: string;
   zoom_meeting_url?: string;
   zoom_host_url?: string;
   meeting_url?: string; // Backwards compatible alias
   recording_status?: RecordingStatus;
   recording_url?: string;
+  recording_id?: string;
   recording_storage_path?: string;
   thumbnail_url?: string;
   status: EventStatus;

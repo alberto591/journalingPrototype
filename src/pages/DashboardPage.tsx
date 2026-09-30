@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../lib/dataStore';
 import { PostComposer } from '../components/community/PostComposer';
 import { PostCard } from '../components/community/PostCard';
+import { RecordingPlayerModal } from '../components/recordings/RecordingPlayerModal';
+import { zoomService } from '../services/zoomService';
+import { SessionRecording, EventItem } from '../types';
 import { 
   Sparkles, 
   PenLine, 
@@ -12,10 +15,12 @@ import {
   Flame, 
   ArrowRight, 
   Video,
+  PlayCircle,
   Pin,
   TrendingUp,
   Filter,
-  Users
+  Users,
+  AlertCircle
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -24,17 +29,69 @@ export const DashboardPage: React.FC = () => {
     currentUser, 
     posts, 
     events, 
+    recordings,
     nextUpcomingEvent,
     todayJournalSession, 
     toggleRegisterEvent,
+    trackZoomJoinClick,
     currentCommunityCycle,
     currentGlobalCommunityWeek,
     personalJourneyProgress
   } = useDataStore();
 
   const [feedFilter, setFeedFilter] = useState<'all' | 'featured' | 'mine'>('all');
+  const [zoomError, setZoomError] = useState<string | null>(null);
+  const [activePlaybackRecording, setActivePlaybackRecording] = useState<SessionRecording | null>(null);
+  const [isPlayerModalOpen, setIsPlayerModalOpen] = useState<boolean>(false);
 
   const nextSession = nextUpcomingEvent || events.find(e => e.status === 'upcoming') || events[0];
+
+  const nextSessionRecording = React.useMemo(() => {
+    if (!nextSession) return null;
+    const found = recordings.find(
+      r => r.event_id === nextSession.id || (nextSession.recording_id && r.id === nextSession.recording_id)
+    );
+    if (found) return found;
+    if (nextSession.recording_url) {
+      return {
+        id: nextSession.recording_id || `rec-${nextSession.id}`,
+        event_id: nextSession.id,
+        title: nextSession.title,
+        description: nextSession.description || '',
+        date: nextSession.date,
+        duration: `${nextSession.duration_minutes || 35} min`,
+        duration_seconds: (nextSession.duration_minutes || 35) * 60,
+        category: nextSession.theme || 'El Presente',
+        recording_strategy: 'HOSTED',
+        storage_path: nextSession.recording_url,
+        thumbnail_url: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+        status: 'AVAILABLE',
+        uploaded_by: 'admin',
+        uploaded_at: new Date().toISOString(),
+        views_count: 0,
+        is_member_only: true,
+      } as SessionRecording;
+    }
+    return null;
+  }, [nextSession, recordings]);
+
+  const handleEnterZoom = async (eventItem: EventItem) => {
+    setZoomError(null);
+    const zoomUrl = eventItem.meeting_url || eventItem.zoom_meeting_url;
+    
+    // 1. Validate that the URL is a valid Zoom URL
+    if (!zoomService.isValidZoomUrl(zoomUrl)) {
+      setZoomError('El enlace configurado no es una URL válida de Zoom. Contacta con el facilitador.');
+      return;
+    }
+
+    // 2. Track zoom_join_clicked (Do NOT call this attendance)
+    await trackZoomJoinClick(eventItem.id);
+
+    // 3. Open Zoom in a new browser tab
+    window.open(zoomUrl!, '_blank');
+  };
+
 
   const filteredPosts = posts.filter(p => {
     if (feedFilter === 'featured') return p.is_featured || p.is_pinned;
@@ -124,7 +181,12 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
+            <div className="space-y-1.5 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-md font-mono border border-amber-200">
+                  Tema: {nextSession.theme || nextSession.weekly_theme || 'El Presente'}
+                </span>
+              </div>
               <h3 className="font-serif font-bold text-lg sm:text-xl text-stone-900 leading-snug">
                 {nextSession.title}
               </h3>
@@ -136,12 +198,18 @@ export const DashboardPage: React.FC = () => {
                   Enfoque: "{nextSession.prompt}"
                 </p>
               )}
+              {zoomError && (
+                <div className="text-[11px] text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200 mt-2 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
+                  <span>{zoomError}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 flex-shrink-0">
               <button
                 onClick={() => toggleRegisterEvent(nextSession.id)}
-                className={`text-xs py-2 px-3.5 rounded-xl font-semibold transition-all ${
+                className={`text-xs py-2.5 px-3.5 rounded-xl font-semibold transition-all ${
                   nextSession.user_is_registered
                     ? 'bg-sand-200 text-stone-800 hover:bg-sand-300'
                     : 'bg-stone-900 hover:bg-stone-800 text-white shadow-sm'
@@ -151,31 +219,30 @@ export const DashboardPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => {
-                  if (nextSession.meeting_url) {
-                    window.open(nextSession.meeting_url, '_blank');
-                  } else {
-                    navigate('/events');
-                  }
-                }}
-                className="travesia-btn-accent text-xs py-2.5 px-4 font-bold text-stone-950 flex items-center gap-1.5 shadow-sm"
+                onClick={() => handleEnterZoom(nextSession)}
+                className="travesia-btn-accent text-xs py-2.5 px-5 font-bold text-stone-950 flex items-center gap-2 shadow-sm hover:brightness-105"
               >
-                <Video className="w-3.5 h-3.5 text-stone-950" />
-                <span>Entrar a la sesión →</span>
+                <Video className="w-4 h-4 text-stone-950" />
+                <span>ENTRAR EN ZOOM</span>
               </button>
 
-              {nextSession.recording_url && (
+              {nextSessionRecording && (
                 <button
-                  onClick={() => window.open(nextSession.recording_url, '_blank')}
-                  className="travesia-btn-secondary text-xs py-2 px-3 flex items-center gap-1"
+                  onClick={() => {
+                    setActivePlaybackRecording(nextSessionRecording);
+                    setIsPlayerModalOpen(true);
+                  }}
+                  className="travesia-btn-secondary text-xs py-2.5 px-3.5 flex items-center gap-1.5 font-semibold text-stone-800 hover:bg-sand-200"
                 >
-                  <span>Ver grabación</span>
+                  <PlayCircle className="w-4 h-4 text-amber-600" />
+                  <span>VER GRABACIÓN</span>
                 </button>
               )}
             </div>
           </div>
         </div>
       )}
+
 
       {/* 3. THIRD PRIORITY: TU RECORRIDO vs TU PRÓXIMO CAPÍTULO */}
       {!personalJourneyProgress.isFoundationCompleted ? (
@@ -359,6 +426,17 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Recording Player Modal */}
+      <RecordingPlayerModal
+        recording={activePlaybackRecording}
+        isOpen={isPlayerModalOpen}
+        onClose={() => {
+          setIsPlayerModalOpen(false);
+          setActivePlaybackRecording(null);
+        }}
+      />
     </div>
   );
 };
+
