@@ -11,7 +11,11 @@ import {
   JournalSession, 
   DailyPrompt,
   NotificationItem,
-  OnboardingData
+  OnboardingData,
+  OngoingCycle,
+  CycleReflection,
+  MemberHistoryItem,
+  ContinuousRetentionMetrics
 } from '../types';
 import { 
   DEMO_CURRENT_USER, 
@@ -31,6 +35,7 @@ import { communityService } from '../services/communityService';
 import { eventsService } from '../services/eventsService';
 import { promptsService, getDeterministicDailyPrompt } from '../services/promptsService';
 import { adminService } from '../services/adminService';
+import { journeyService, INITIAL_ONGOING_CYCLES } from '../services/journeyService';
 
 interface DataStoreContextType {
   currentUser: Profile;
@@ -100,6 +105,32 @@ interface DataStoreContextType {
   markNotificationAsRead: (notificationId: string) => void;
   markAllNotificationsAsRead: () => void;
 
+  // Continuous Retention Journey & Ongoing Cycles
+  ongoingCycles: OngoingCycle[];
+  currentCommunityCycle: OngoingCycle;
+  currentGlobalCommunityWeek: number;
+  personalJourneyProgress: {
+    journeyStartedAt: string;
+    daysSinceStart: number;
+    personalWeek: number;
+    personalDayInWeek: number;
+    current_week: number;
+    current_day: number;
+    isFoundationCompleted: boolean;
+    foundationCompletedAt: string | null;
+  };
+  billingCycle: {
+    billingStartedAt: string;
+    nextBillingDate: string;
+    daysUntilRenewal: number;
+  };
+  memberTimeline: MemberHistoryItem[];
+  continuousRetentionMetrics: ContinuousRetentionMetrics;
+  completeFoundation: () => Promise<void>;
+  submitCycleReflection: (cycleId: string, cycleTitle: string, reflection: { discovered: string; changed: string; carrying_forward: string; explore_next: string }) => Promise<void>;
+  addOngoingCycle: (cycle: OngoingCycle) => Promise<void>;
+  updateOngoingCycle: (id: string, updates: Partial<OngoingCycle>) => Promise<void>;
+
   // Onboarding
   onboardingData: OnboardingData | null;
   saveOnboarding: (data: OnboardingData) => void;
@@ -123,6 +154,13 @@ const DEFAULT_EMPTY_USER: Profile = {
   reflection_minutes: 0,
   current_week: 1,
   onboarding_completed: false,
+  journey_started_at: new Date().toISOString(),
+  foundation_completed_at: null,
+  current_cycle_id: 'cycle-relaciones',
+  current_cycle_week: 2,
+  current_day: 1,
+  billing_started_at: new Date().toISOString(),
+  next_billing_date: new Date(Date.now() + 30 * 24 * 3600000).toISOString(),
 };
 
 export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -335,6 +373,61 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const todayPrompt = useMemo(() => {
     return getDeterministicDailyPrompt(dailyPrompts, new Date(), currentUser.current_week);
   }, [dailyPrompts, currentUser.current_week]);
+
+  // -------------------------------------------------------------
+  // CONTINUOUS RETENTION JOURNEY & ONGOING CYCLES
+  // -------------------------------------------------------------
+  const [ongoingCycles, setOngoingCycles] = useState<OngoingCycle[]>(() => {
+    return journeyService.fetchOngoingCycles();
+  });
+
+  const currentCommunityCycle = useMemo(() => {
+    return ongoingCycles.find(c => c.status === 'active') || ongoingCycles[0] || INITIAL_ONGOING_CYCLES[0];
+  }, [ongoingCycles]);
+
+  const currentGlobalCommunityWeek = 2;
+
+  const personalJourneyProgress = useMemo(() => {
+    return journeyService.calculatePersonalFoundationProgress(currentUser);
+  }, [currentUser]);
+
+  const billingCycle = useMemo(() => {
+    return journeyService.calculateBillingDates(currentUser);
+  }, [currentUser]);
+
+  const memberTimeline = useMemo(() => {
+    return journeyService.getMemberTimeline(currentUser);
+  }, [currentUser, ongoingCycles]);
+
+  const continuousRetentionMetrics = useMemo(() => {
+    return journeyService.calculateContinuousRetentionMetrics(members, userJournalSessions);
+  }, [members, userJournalSessions]);
+
+  const completeFoundation = async () => {
+    const updated = journeyService.completeFoundationJourney(currentUser);
+    setCurrentUser(updated);
+  };
+
+  const submitCycleReflection = async (
+    cycleId: string,
+    cycleTitle: string,
+    reflection: { discovered: string; changed: string; carrying_forward: string; explore_next: string }
+  ) => {
+    journeyService.submitCycleReflection(currentUser, cycleId, cycleTitle, reflection);
+    setCurrentUser(prev => ({ ...prev }));
+  };
+
+  const addOngoingCycle = async (newCycle: OngoingCycle) => {
+    const updated = [...ongoingCycles, newCycle];
+    setOngoingCycles(updated);
+    journeyService.saveOngoingCycles(updated);
+  };
+
+  const updateOngoingCycle = async (id: string, updates: Partial<OngoingCycle>) => {
+    const updated = ongoingCycles.map(c => c.id === id ? { ...c, ...updates } : c);
+    setOngoingCycles(updated);
+    journeyService.saveOngoingCycles(updated);
+  };
 
   // -------------------------------------------------------------
   // REAL AUTH METHODS
@@ -709,6 +802,17 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         markAllNotificationsAsRead,
         onboardingData,
         saveOnboarding,
+        ongoingCycles,
+        currentCommunityCycle,
+        currentGlobalCommunityWeek,
+        personalJourneyProgress,
+        billingCycle,
+        memberTimeline,
+        continuousRetentionMetrics,
+        completeFoundation,
+        submitCycleReflection,
+        addOngoingCycle,
+        updateOngoingCycle,
       }}
     >
       {children}

@@ -49,10 +49,16 @@ export const AdminDashboard: React.FC = () => {
     journalSessions,
     addDailyPrompt, 
     toggleDailyPromptActive, 
-    addEvent 
+    addEvent,
+    ongoingCycles,
+    currentCommunityCycle,
+    currentGlobalCommunityWeek,
+    continuousRetentionMetrics,
+    addOngoingCycle,
+    updateOngoingCycle
   } = useDataStore();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'founding_members' | 'product_log' | 'content' | 'prompts' | 'events' | 'settings'>('business');
+  const [activeTab, setActiveTab] = useState<'business' | 'cycles' | 'founding_members' | 'product_log' | 'content' | 'prompts' | 'events' | 'settings'>('business');
 
   // Business settings state
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_BUSINESS_SETTINGS);
@@ -67,10 +73,16 @@ export const AdminDashboard: React.FC = () => {
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [showAddContentModal, setShowAddContentModal] = useState(false);
   const [showAddLogModal, setShowAddLogModal] = useState(false);
+  const [showAddCycleModal, setShowAddCycleModal] = useState(false);
   const [showActivateMemberModal, setShowActivateMemberModal] = useState<Profile | null>(null);
   const [selectedMemberForInterview, setSelectedMemberForInterview] = useState<Profile | null>(null);
   const [activationDurationDays, setActivationDurationDays] = useState<number>(30);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+
+  // New cycle form state
+  const [newCycleTitle, setNewCycleTitle] = useState('');
+  const [newCycleTheme, setNewCycleTheme] = useState('');
+  const [newCycleDesc, setNewCycleDesc] = useState('');
 
   // Product log form state
   const [newObs, setNewObs] = useState('');
@@ -304,6 +316,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="flex items-center gap-2 border-b border-sand-200 pb-2 overflow-x-auto text-xs font-semibold">
         {[
           { id: 'business', label: 'Negocio & Retención' },
+          { id: 'cycles', label: `Ciclos Continuos (${ongoingCycles.length})` },
           { id: 'founding_members', label: `Miembros Fundadores (${members.length})` },
           { id: 'product_log', label: `Bitácora de Producto (${productLogs.length})` },
           { id: 'content', label: `Contenido & Creador (${contentItems.length})` },
@@ -561,6 +574,259 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* REQUIREMENT 17: CONTINUOUS RETENTION LOOP METRICS (POST-WEEK 4) */}
+            <div className="travesia-card p-6 space-y-5 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 text-white rounded-3xl border border-stone-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-4">
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-400">
+                    Retención Continua · Loop Post-Semana 4
+                  </span>
+                  <h3 className="font-serif font-bold text-2xl text-white mt-0.5">
+                    Métricas de Transición & Membresía Continua
+                  </h3>
+                </div>
+                <span className="text-xs bg-amber-400/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full font-mono font-semibold">
+                  Métrica Vital: Continuación Post-W4 ({continuousRetentionMetrics.continuation_after_week_4_rate}%)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-4 rounded-2xl bg-stone-800/80 border border-stone-700">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">Completitud Foundation</span>
+                  <span className="font-mono text-2xl font-bold text-white mt-1 block">{continuousRetentionMetrics.foundation_completion_rate}%</span>
+                  <span className="text-[10px] text-stone-400">{continuousRetentionMetrics.foundation_completed || 0} de {continuousRetentionMetrics.total_members_analyzed} miembros</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-stone-800/80 border border-amber-500/50">
+                  <span className="text-[10px] uppercase font-bold text-amber-400 block">Continuación Post-W4</span>
+                  <span className="font-mono text-2xl font-bold text-amber-400 mt-1 block">{continuousRetentionMetrics.continuation_after_week_4_rate}%</span>
+                  <span className="text-[10px] text-stone-400">Pasan a ciclos indefinidos</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-stone-800/80 border border-stone-700">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">En Ciclos Activos</span>
+                  <span className="font-mono text-2xl font-bold text-emerald-400 mt-1 block">{continuousRetentionMetrics.active_in_ongoing_cycles || 0}</span>
+                  <span className="text-[10px] text-stone-400">Miembros en capítulo actual</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-stone-800/80 border border-stone-700">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">Frecuencia de Práctica</span>
+                  <span className="font-mono text-2xl font-bold text-white mt-1 block">{continuousRetentionMetrics.daily_practice_frequency_avg}d/sem</span>
+                  <span className="text-[10px] text-stone-400">Frecuencia hábito activo</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="p-3.5 rounded-xl bg-stone-800/50 border border-stone-700/60 text-xs text-stone-300">
+                  <span className="text-[10px] text-stone-400 block font-semibold">Completitud Ciclos</span>
+                  <span className="font-mono text-base font-bold text-white mt-0.5 block">{continuousRetentionMetrics.cycle_completion_rate}%</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-stone-800/50 border border-stone-700/60 text-xs text-stone-300">
+                  <span className="text-[10px] text-stone-400 block font-semibold">Pase Ciclo a Ciclo</span>
+                  <span className="font-mono text-base font-bold text-white mt-0.5 block">{continuousRetentionMetrics.cycle_to_cycle_continuation_rate}%</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-stone-800/50 border border-stone-700/60 text-xs text-stone-300">
+                  <span className="text-[10px] text-stone-400 block font-semibold">Asistencia En Vivo</span>
+                  <span className="font-mono text-base font-bold text-white mt-0.5 block">{continuousRetentionMetrics.live_attendance_rate}%</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-stone-800/50 border border-stone-700/60 text-xs text-stone-300">
+                  <span className="text-[10px] text-stone-400 block font-semibold">Tasa de Renovación</span>
+                  <span className="font-mono text-base font-bold text-emerald-400 mt-0.5 block">{continuousRetentionMetrics.renewal_rate}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB: ONGOING CYCLES & COMMUNITY RECURRENCE                    */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === 'cycles' && (
+        <div className="space-y-6">
+          {/* Header & Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-widest text-amber-700 font-bold">
+                Arquitectura de Retención Continua
+              </span>
+              <h2 className="font-serif font-bold text-2xl sm:text-3xl text-stone-900 mt-0.5">
+                Gestión de Ciclos Mensuales y Semanas Globales
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-2xl">
+                Los ciclos mensuales mantienen viva la membresía indefinidamente. Todos los miembros activos sincronizan en el ciclo global mientras avanzan su recorrido personal a su propio ritmo.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowAddCycleModal(true)}
+              className="travesia-btn-primary text-xs py-2.5 px-4 flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Añadir Ciclo Mensual</span>
+            </button>
+          </div>
+
+          {/* ADMIN VIEW: CURRENT COMMUNITY CYCLE & UPCOMING CYCLE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* CURRENT COMMUNITY CYCLE */}
+            <div className="bg-stone-900 text-white rounded-3xl p-6 border-2 border-amber-500/50 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase font-bold tracking-widest text-amber-400 bg-stone-800 px-3 py-1 rounded-full border border-stone-700">
+                  CURRENT COMMUNITY CYCLE
+                </span>
+                <span className="text-xs bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-0.5 rounded-full font-bold">
+                  En Vivo
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-serif font-bold text-2xl text-white">
+                  Ciclo {currentCommunityCycle?.cycle_number}: {currentCommunityCycle?.title}
+                </h3>
+                <p className="text-amber-300 text-xs font-semibold mt-0.5">
+                  Eje: {currentCommunityCycle?.theme}
+                </p>
+                <p className="text-stone-300 text-xs mt-2 leading-relaxed">
+                  {currentCommunityCycle?.description}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-stone-800/80 border border-stone-700 text-xs text-stone-300 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">Semana Global Activa</span>
+                  <span className="font-serif font-bold text-sm text-white">
+                    Semana {currentGlobalCommunityWeek} de 4
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">Período</span>
+                  <span className="font-mono text-xs text-amber-400">
+                    {currentCommunityCycle?.start_date} al {currentCommunityCycle?.end_date}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* UPCOMING CYCLE */}
+            <div className="bg-white rounded-3xl p-6 border border-sand-200 space-y-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase font-bold tracking-widest text-stone-600 bg-sand-100 px-3 py-1 rounded-full">
+                  UPCOMING CYCLE
+                </span>
+                <span className="text-xs bg-sand-100 text-stone-600 px-2.5 py-0.5 rounded-full font-bold">
+                  Próximo Mes
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-serif font-bold text-2xl text-stone-900">
+                  Ciclo 2: Propósito
+                </h3>
+                <p className="text-stone-600 text-xs font-semibold mt-0.5">
+                  Eje: Vocación, servicio, prioridades y legado duradero
+                </p>
+                <p className="text-stone-600 text-xs mt-2 leading-relaxed">
+                  Clarificación de la llamada personal ante Dios y la ordenación sobria de los recursos y el tiempo disponible.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-sand-50 border border-sand-200 text-xs text-stone-700 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-stone-500 block">Transición Programada</span>
+                  <span className="font-serif font-bold text-sm text-stone-900">
+                    Noviembre 2026
+                  </span>
+                </div>
+                <span className="text-[11px] text-stone-500">
+                  Se activa automáticamente al cerrar el Ciclo 1
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* CYCLE CALENDAR & CATALOG */}
+          <div className="bg-white rounded-3xl p-6 border border-sand-200 space-y-6 shadow-card">
+            <div className="flex items-center justify-between border-b border-sand-200 pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-xl text-stone-900">
+                  Calendario Anual de Ciclos (Cycle Calendar)
+                </h3>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  11 temas canónicos definidos para la Travesía Continua. Cada uno con 4 semanas y temas diarios.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-stone-700 bg-sand-100 px-3 py-1 rounded-full">
+                {ongoingCycles.length} Ciclos Registrados
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {ongoingCycles.map((cycle) => {
+                const isCurrent = cycle.id === currentCommunityCycle?.id;
+                return (
+                  <div
+                    key={cycle.id}
+                    className={`p-5 rounded-2xl border transition-all ${
+                      isCurrent
+                        ? 'border-amber-400 bg-amber-50/40 shadow-sm'
+                        : 'border-sand-200 bg-sand-50/20'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-sand-200/80 pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                          isCurrent ? 'bg-amber-500 text-stone-950' : 'bg-sand-200 text-stone-700'
+                        }`}>
+                          {cycle.cycle_number}
+                        </span>
+                        <div>
+                          <h4 className="font-serif font-bold text-lg text-stone-900">
+                            {cycle.title}
+                          </h4>
+                          <span className="text-xs text-stone-500">Eje: {cycle.theme}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                          isCurrent
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-sand-100 text-stone-600'
+                        }`}>
+                          {isCurrent ? '● Ciclo Activo' : cycle.status}
+                        </span>
+                        <span className="text-xs font-mono text-stone-500">
+                          {cycle.start_date} → {cycle.end_date}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-stone-600 mt-2.5 leading-relaxed">
+                      {cycle.description}
+                    </p>
+
+                    {/* 4 Weekly themes breakdown */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-3 pt-3 border-t border-sand-200/60">
+                      {cycle.weeks.map((w) => (
+                        <div key={w.week_number} className="p-2.5 rounded-xl bg-white border border-sand-200 text-xs">
+                          <span className="text-[10px] font-bold text-amber-700 block uppercase">
+                            Semana {w.week_number}
+                          </span>
+                          <span className="font-semibold text-stone-900 block mt-0.5">
+                            {w.title}
+                          </span>
+                          <span className="text-[11px] text-stone-500 line-clamp-2 mt-0.5">
+                            {w.daily_prompt_example || w.prompt_focus || w.focus}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1600,6 +1866,103 @@ export const AdminDashboard: React.FC = () => {
                   className="travesia-btn-primary text-xs py-2 px-5"
                 >
                   Guardar en Bitácora
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD ONGOING CYCLE */}
+      {showAddCycleModal && (
+        <div className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-sand-200 space-y-4 animate-fade-in">
+            <div className="border-b border-sand-200 pb-3">
+              <h3 className="font-serif font-bold text-xl text-stone-900">
+                Añadir Nuevo Ciclo Mensual
+              </h3>
+              <p className="text-xs text-stone-600 mt-0.5">
+                Crea un nuevo tema canónico de 4 semanas para la Travesía Continua.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCycleTitle || !newCycleTheme) return;
+                addOngoingCycle({
+                  id: `cycle-${Date.now()}`,
+                  title: newCycleTitle,
+                  theme: newCycleTheme,
+                  description: newCycleDesc || `Exploración profunda de ${newCycleTitle} en la vida diaria y comunitaria.`,
+                  start_date: '2026-11-01',
+                  end_date: '2026-11-28',
+                  cycle_number: ongoingCycles.length + 1,
+                  status: 'upcoming',
+                  weeks: [
+                    { week_number: 1, title: 'El Presente', focus: 'Diagnóstico honesto de este territorio', daily_prompt_example: '¿Cuál es la verdad aquí?' },
+                    { week_number: 2, title: 'La Visión', focus: 'Hacia dónde caminar', daily_prompt_example: '¿Qué estándar quieres forjar?' },
+                    { week_number: 3, title: 'Los Obstáculos', focus: 'Qué te frena', daily_prompt_example: '¿Dónde está la resistencia?' },
+                    { week_number: 4, title: 'El Trabajo', focus: 'Acción y disciplina', daily_prompt_example: '¿Qué paso das hoy?' }
+                  ]
+                });
+                setShowAddCycleModal(false);
+                setNewCycleTitle('');
+                setNewCycleTheme('');
+                setNewCycleDesc('');
+                setActionSuccessMsg('Nuevo ciclo mensual registrado correctamente');
+                setTimeout(() => setActionSuccessMsg(null), 3000);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Título del Ciclo</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Coraje, Límites, Discernimiento..."
+                  value={newCycleTitle}
+                  onChange={(e) => setNewCycleTitle(e.target.value)}
+                  className="travesia-input w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Eje Temático</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Valentía frente al conflicto, decir la verdad con amor..."
+                  value={newCycleTheme}
+                  onChange={(e) => setNewCycleTheme(e.target.value)}
+                  className="travesia-input w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Descripción</label>
+                <textarea
+                  rows={3}
+                  placeholder="Propósito formativo del ciclo..."
+                  value={newCycleDesc}
+                  onChange={(e) => setNewCycleDesc(e.target.value)}
+                  className="travesia-input w-full"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-sand-200">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCycleModal(false)}
+                  className="travesia-btn-secondary text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="travesia-btn-primary text-xs py-2 px-5"
+                >
+                  Crear Ciclo
                 </button>
               </div>
             </form>

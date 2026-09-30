@@ -10,22 +10,49 @@ import {
   Eye, 
   ShieldAlert, 
   Hammer,
-  Award
+  Award,
+  BookOpen,
+  Milestone,
+  History,
+  Check,
+  ChevronRight,
+  Flame,
+  Clock,
+  Layers,
+  HeartHandshake
 } from 'lucide-react';
 
 export const FourWeekJourneyView: React.FC = () => {
-  const { currentUser, updateCurrentUserProfile } = useDataStore();
-  const [selectedWeek, setSelectedWeek] = useState<number>(currentUser.current_week || 2);
-  const [nextChapterText, setNextChapterText] = useState<string>(() => {
-    try {
-      return localStorage.getItem(`travesia_next_chapter_${currentUser.id}`) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [savedChapter, setSavedChapter] = useState(false);
+  const { 
+    currentUser, 
+    updateCurrentUserProfile,
+    personalJourneyProgress,
+    ongoingCycles,
+    currentCommunityCycle,
+    currentGlobalCommunityWeek,
+    memberTimeline,
+    completeFoundation,
+    submitCycleReflection
+  } = useDataStore();
 
-  const WEEKS = [
+  const isFoundationCompleted = Boolean(currentUser.foundation_completed_at);
+  const [activeTab, setActiveTab] = useState<'foundation' | 'ongoing' | 'history'>(
+    isFoundationCompleted ? 'ongoing' : 'foundation'
+  );
+
+  const [selectedFoundationWeek, setSelectedFoundationWeek] = useState<number>(
+    personalJourneyProgress?.current_week || currentUser.current_week || 1
+  );
+
+  // Reflection form state for ongoing cycle completion
+  const [reflection1, setReflection1] = useState('');
+  const [reflection2, setReflection2] = useState('');
+  const [reflection3, setReflection3] = useState('');
+  const [reflection4, setReflection4] = useState('');
+  const [reflectionSuccess, setReflectionSuccess] = useState(false);
+  const [showReflectionModal, setShowReflectionModal] = useState(false);
+
+  const FOUNDATION_WEEKS = [
     {
       number: 1,
       title: 'EL PRESENTE',
@@ -110,188 +137,622 @@ export const FourWeekJourneyView: React.FC = () => {
     }
   ];
 
-  const currentWeekData = WEEKS[selectedWeek - 1];
+  const currentFoundationWeekData = FOUNDATION_WEEKS[selectedFoundationWeek - 1] || FOUNDATION_WEEKS[0];
 
-  const handleSaveNextChapter = () => {
-    try {
-      localStorage.setItem(`travesia_next_chapter_${currentUser.id}`, nextChapterText);
-    } catch {}
-    setSavedChapter(true);
-    setTimeout(() => setSavedChapter(false), 3000);
+  const handleCompleteFoundation = () => {
+    completeFoundation();
+    setActiveTab('ongoing');
+  };
+
+  const handleSubmitReflection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCommunityCycle) return;
+    submitCycleReflection(currentCommunityCycle.id, currentCommunityCycle.title, {
+      discovered: reflection1,
+      changed: reflection2,
+      carrying_forward: reflection3,
+      explore_next: reflection4
+    });
+    setReflectionSuccess(true);
+    setTimeout(() => {
+      setReflectionSuccess(false);
+      setShowReflectionModal(false);
+    }, 2500);
   };
 
   return (
     <div className="max-w-4xl mx-auto py-4 px-4 space-y-8 animate-fade-in">
-      {/* Hero Header */}
-      <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
-        <div className="relative z-10">
-          <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-flex items-center gap-1.5 mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Itinerario Formativo Principal</span>
-          </span>
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold">
-            El Camino de 4 Semanas
-          </h1>
-          <p className="text-sand-300 text-xs sm:text-sm mt-2 max-w-xl leading-relaxed">
-            Un ciclo recurrente de 28 días diseñado para forjar consistencia, clarificar visión, derribar obstáculos y ejecutar el trabajo necesario.
-          </p>
-
-          <div className="flex items-center gap-2 mt-4 text-xs text-sand-400">
-            <span>Tu ubicación actual:</span>
-            <span className="font-bold text-amber-400 bg-stone-800 px-2.5 py-1 rounded-lg border border-stone-700">
-              Semana {currentUser.current_week}: {WEEKS[currentUser.current_week - 1].title}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Week Selector Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {WEEKS.map(w => {
-          const isSelected = selectedWeek === w.number;
-          const isCurrent = currentUser.current_week === w.number;
-          const Icon = w.icon;
-
-          return (
-            <button
-              key={w.number}
-              onClick={() => setSelectedWeek(w.number)}
-              className={`p-4 rounded-2xl border text-left transition-all relative ${
-                isSelected
-                  ? 'border-stone-900 bg-stone-900 text-white shadow-md'
-                  : 'border-sand-200 bg-white hover:bg-sand-100/70 text-stone-800'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                  isSelected ? 'bg-stone-800 text-amber-400' : 'bg-sand-100 text-stone-600'
-                }`}>
-                  Semana {w.number}
-                </span>
-                <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : 'text-stone-400'}`} />
-              </div>
-              <p className="font-serif font-bold text-base leading-tight">
-                {w.title}
-              </p>
-              {isCurrent && (
-                <span className="inline-block mt-2 text-[10px] font-semibold text-emerald-500">
-                  ● En curso
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Selected Week Deep Dive Card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sand-200 shadow-card space-y-6">
-        <div className="border-b border-sand-200 pb-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-bronze-700 uppercase tracking-wider">
-            <span>Módulo de la Semana {currentWeekData.number}</span>
-          </div>
-          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-            {currentWeekData.title}: {currentWeekData.tagline}
-          </h2>
-          <p className="text-sm text-stone-600 mt-1 leading-relaxed">
-            {currentWeekData.focus}
-          </p>
-        </div>
-
-        {/* Topics List */}
-        <div>
-          <h3 className="font-serif font-bold text-base text-stone-900 mb-3">
-            Ejes de Reflexión y Práctica
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {currentWeekData.topics.map((topic, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-xl bg-sand-50/70 border border-sand-200 text-xs text-stone-800 flex items-start gap-2.5"
-              >
-                <span className="w-5 h-5 rounded-full bg-sand-200 text-stone-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px] mt-0.5">
-                  {idx + 1}
-                </span>
-                <span className="leading-snug">{topic}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Exercises */}
-        <div>
-          <h3 className="font-serif font-bold text-base text-stone-900 mb-3">
-            Ejercicios Prácticos de la Semana
-          </h3>
-          <div className="space-y-2">
-            {currentWeekData.exercises.map((ex, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200 text-xs text-stone-800 flex items-center justify-between"
-              >
-                <span className="font-medium text-stone-900">{ex}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-bronze-700 px-2 py-0.5 rounded bg-white border border-amber-200">
-                  Ejercicio
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Set as current week button */}
-        <div className="pt-2 flex justify-end">
-          {currentUser.current_week !== currentWeekData.number ? (
-            <button
-              onClick={() => updateCurrentUserProfile({ current_week: currentWeekData.number })}
-              className="travesia-btn-secondary text-xs py-2 px-4"
-            >
-              Fijar Semana {currentWeekData.number} como mi foco actual
-            </button>
-          ) : (
-            <span className="text-xs text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-              <CheckCircle className="w-4 h-4" /> Esta es tu semana activa
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* FINAL DEL CICLO: MI PRÓXIMO CAPÍTULO */}
-      <div className="travesia-card p-6 sm:p-8 bg-gradient-to-br from-sand-100/70 via-white to-sand-50 space-y-4">
+      {/* Top Experience Navigation Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-sand-200 pb-3">
         <div className="flex items-center gap-2">
-          <Award className="w-5 h-5 text-bronze-600" />
-          <h3 className="font-serif font-bold text-xl text-stone-900">
-            Mi Próximo Capítulo
-          </h3>
-        </div>
-        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-          Al culminar las 4 semanas, redacta aquí tu síntesis de madurez: ¿Qué ha cambiado en ti? ¿Qué convicciones te llevas? ¿Qué pacto renuevas ante Dios para el siguiente ciclo?
-        </p>
-
-        <textarea
-          value={nextChapterText}
-          onChange={(e) => setNextChapterText(e.target.value)}
-          placeholder="Escribe tu resumen personal del ciclo de 4 semanas..."
-          rows={4}
-          className="w-full p-4 rounded-2xl bg-white border border-sand-200 focus:border-stone-400 text-stone-900 text-xs sm:text-sm leading-relaxed resize-none focus:outline-none"
-        />
-
-        <div className="flex items-center justify-between pt-1">
-          {savedChapter ? (
-            <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" /> Resumen guardado en tu diario personal
-            </span>
-          ) : (
-            <span className="text-xs text-stone-400">Actualizable al final de cada ciclo</span>
-          )}
+          <button
+            onClick={() => setActiveTab('foundation')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'foundation'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Primer Recorrido (Foundation)</span>
+            {isFoundationCompleted && (
+              <span className="text-[10px] bg-emerald-800 text-emerald-200 px-1.5 py-0.2 rounded-full">✓</span>
+            )}
+          </button>
 
           <button
-            onClick={handleSaveNextChapter}
-            disabled={!nextChapterText.trim()}
-            className="travesia-btn-primary text-xs py-2 px-5"
+            onClick={() => setActiveTab('ongoing')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'ongoing'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+            }`}
           >
-            Guardar Mi Próximo Capítulo
+            <Layers className="w-3.5 h-3.5" />
+            <span>Capítulos Continuos (Ciclos)</span>
+            <span className="text-[10px] bg-amber-500/20 text-amber-700 px-1.5 py-0.2 rounded-full font-bold">En Vivo</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'history'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Mi Recorrido</span>
           </button>
         </div>
+
+        <div className="text-right">
+          <span className="text-[11px] text-stone-500 block">
+            {isFoundationCompleted ? 'Membresía Continua Activa' : 'Etapa Formativa Inicial'}
+          </span>
+        </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* VIEW 1: PRIMER RECORRIDO (FOUNDATION JOURNEY)                             */}
+      {/* ========================================================================= */}
+      {activeTab === 'foundation' && (
+        <div className="space-y-6">
+          {/* Hero Header */}
+          <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+            <div className="relative z-10 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Primer Recorrido · Foundation</span>
+                </span>
+                {isFoundationCompleted ? (
+                  <span className="text-xs bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 px-3 py-1 rounded-full font-medium">
+                    Primer recorrido completado
+                  </span>
+                ) : (
+                  <span className="text-xs bg-amber-950/80 text-amber-300 border border-amber-700/50 px-3 py-1 rounded-full font-medium">
+                    Semana {personalJourneyProgress?.current_week || 1} de 4 · Día {personalJourneyProgress?.current_day || 1}
+                  </span>
+                )}
+              </div>
+
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold">
+                El Camino de 4 Semanas
+              </h1>
+              <p className="text-sand-300 text-xs sm:text-sm max-w-xl leading-relaxed">
+                Tu primer recorrido personal. Cuatro semanas diseñadas para aprender a frenar el ruido, clarificar visión, derribar obstáculos y forjar la disciplina del trabajo diario.
+              </p>
+
+              {/* Requirement 11: Explanatory microcopy for new users */}
+              <div className="p-3.5 rounded-2xl bg-stone-800/80 border border-stone-700/70 text-xs text-sand-300 flex items-start gap-2.5">
+                <HeartHandshake className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-white">
+                    "Tu recorrido comienza hoy. Mientras tanto, puedes participar en todo lo que está viviendo la comunidad."
+                  </p>
+                  <p className="text-stone-400 text-[11px] mt-0.5">
+                    Tu proceso de 4 semanas es completamente tuyo. No tienes que esperar al primer día de mes ni sincronizarte con el calendario para empezar a transformar tu vida.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Week Selector Tabs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {FOUNDATION_WEEKS.map(w => {
+              const isSelected = selectedFoundationWeek === w.number;
+              const isCurrent = (personalJourneyProgress?.current_week || 1) === w.number;
+              const Icon = w.icon;
+
+              return (
+                <button
+                  key={w.number}
+                  onClick={() => setSelectedFoundationWeek(w.number)}
+                  className={`p-4 rounded-2xl border text-left transition-all relative ${
+                    isSelected
+                      ? 'border-stone-900 bg-stone-900 text-white shadow-md'
+                      : 'border-sand-200 bg-white hover:bg-sand-100/70 text-stone-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      isSelected ? 'bg-stone-800 text-amber-400' : 'bg-sand-100 text-stone-600'
+                    }`}>
+                      Semana {w.number}
+                    </span>
+                    <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : 'text-stone-400'}`} />
+                  </div>
+                  <p className="font-serif font-bold text-base leading-tight">
+                    {w.title}
+                  </p>
+                  {isCurrent && !isFoundationCompleted && (
+                    <span className="inline-block mt-2 text-[10px] font-semibold text-amber-500">
+                      ● Tu semana activa
+                    </span>
+                  )}
+                  {isFoundationCompleted && (
+                    <span className="inline-block mt-2 text-[10px] font-semibold text-emerald-600">
+                      ✓ Completada
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected Week Deep Dive Card */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sand-200 shadow-card space-y-6">
+            <div className="border-b border-sand-200 pb-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-bronze-700 uppercase tracking-wider">
+                <span>Módulo de la Semana {currentFoundationWeekData.number}</span>
+              </div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                {currentFoundationWeekData.title}: {currentFoundationWeekData.tagline}
+              </h2>
+              <p className="text-sm text-stone-600 mt-1 leading-relaxed">
+                {currentFoundationWeekData.focus}
+              </p>
+            </div>
+
+            {/* Topics List */}
+            <div>
+              <h3 className="font-serif font-bold text-base text-stone-900 mb-3">
+                Ejes de Reflexión y Práctica
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {currentFoundationWeekData.topics.map((topic, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-sand-50/70 border border-sand-200 text-xs text-stone-800 flex items-start gap-2.5"
+                  >
+                    <span className="w-5 h-5 rounded-full bg-sand-200 text-stone-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px] mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <span className="leading-snug">{topic}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Exercises */}
+            <div>
+              <h3 className="font-serif font-bold text-base text-stone-900 mb-3">
+                Ejercicios Prácticos de la Semana
+              </h3>
+              <div className="space-y-2">
+                {currentFoundationWeekData.exercises.map((ex, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200 text-xs text-stone-800 flex items-center justify-between"
+                  >
+                    <span className="font-medium text-stone-900">{ex}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-bronze-700 px-2 py-0.5 rounded bg-white border border-amber-200">
+                      Ejercicio
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* REQUIREMENT 2 & 10: END OF FOUR WEEKS / TRANSITION TO ONGOING */}
+          <div className="travesia-card p-6 sm:p-8 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 text-white space-y-4">
+            <div className="flex items-center gap-2">
+              <Award className="w-6 h-6 text-amber-400" />
+              <span className="text-xs uppercase font-bold tracking-widest text-amber-400">
+                {isFoundationCompleted ? 'Primer Recorrido Completado' : 'Culminación del Primer Recorrido'}
+              </span>
+            </div>
+
+            <div>
+              <h3 className="font-serif text-2xl sm:text-3xl font-bold text-white">
+                "Has completado tu primer recorrido."
+              </h3>
+              <p className="text-stone-300 text-sm mt-2 font-serif italic leading-relaxed">
+                "Esto no era la meta. Era aprender a hacer el trabajo."
+              </p>
+              <p className="text-stone-400 text-xs mt-2 leading-relaxed">
+                Tu siguiente capítulo comienza ahora. La comunidad continúa cada mes explorando un eje vital diferente (Relaciones, Propósito, Disciplina, Coraje, Límites) mediante la práctica matutina y encuentros en vivo.
+              </p>
+            </div>
+
+            <div className="pt-3 flex flex-wrap items-center gap-4">
+              {!isFoundationCompleted ? (
+                <button
+                  onClick={handleCompleteFoundation}
+                  className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
+                >
+                  <span>Empezar mi próximo capítulo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setActiveTab('ongoing')}
+                  className="px-6 py-3 rounded-2xl bg-stone-800 hover:bg-stone-700 text-sand-50 font-bold text-xs uppercase tracking-wider border border-stone-700 flex items-center gap-2 transition-all"
+                >
+                  <span>Explorar el Ciclo Actual de la Comunidad ({currentCommunityCycle?.title})</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+
+              <span className="text-[11px] text-stone-400">
+                Tu membresía activa te da acceso ininterrumpido a todos los ciclos continuos.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 2: CAPÍTULOS CONTINUOS (ONGOING MONTHLY CYCLES)                      */}
+      {/* ========================================================================= */}
+      {activeTab === 'ongoing' && (
+        <div className="space-y-6">
+          {/* Current Community Cycle Hero */}
+          <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/90 px-3 py-1 rounded-full border border-stone-700/60 inline-flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                <span>Ciclo Global de la Comunidad · Mes En Curso</span>
+              </span>
+
+              <span className="text-xs bg-stone-800 text-sand-300 px-3 py-1 rounded-full border border-stone-700">
+                Semana Global {currentGlobalCommunityWeek} de 4
+              </span>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wider text-amber-300/90 font-semibold">
+                Esta semana, la comunidad está explorando:
+              </p>
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold mt-1">
+                Ciclo: {currentCommunityCycle?.title}
+              </h1>
+              <p className="text-sand-300 text-xs sm:text-sm mt-2 max-w-2xl leading-relaxed">
+                {currentCommunityCycle?.description}
+              </p>
+            </div>
+
+            {/* Daily Prompt Connection */}
+            <div className="p-4 rounded-2xl bg-stone-800/80 border border-stone-700 text-xs text-sand-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 block mb-0.5">
+                  Tema y Pregunta del Día
+                </span>
+                <p className="font-serif text-sm font-semibold text-white">
+                  "¿Qué conversación estás evitando?"
+                </p>
+              </div>
+              <a
+                href="/journal"
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider text-center flex-shrink-0 transition-all"
+              >
+                Hacer el Trabajo de Hoy →
+              </a>
+            </div>
+          </div>
+
+          {/* 4 Weeks of the Current Ongoing Cycle */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sand-200 shadow-card space-y-6">
+            <div className="border-b border-sand-200 pb-3">
+              <h2 className="font-serif text-2xl font-bold text-stone-900">
+                Itinerario de las 4 Semanas del Ciclo "{currentCommunityCycle?.title}"
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-600 mt-1">
+                Cada semana abre un ángulo profundo del tema. Todos los miembros activos participan simultáneamente.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {currentCommunityCycle?.weeks.map((week) => {
+                const isCurrentWeek = week.week_number === currentGlobalCommunityWeek;
+                return (
+                  <div
+                    key={week.week_number}
+                    className={`p-5 rounded-2xl border transition-all ${
+                      isCurrentWeek
+                        ? 'border-amber-400 bg-amber-50/40 shadow-sm'
+                        : 'border-sand-200 bg-sand-50/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        isCurrentWeek ? 'bg-amber-500 text-stone-950' : 'bg-sand-200 text-stone-700'
+                      }`}>
+                        Semana {week.week_number} {isCurrentWeek ? '· En Vivo' : ''}
+                      </span>
+                    </div>
+                    <h3 className="font-serif font-bold text-lg text-stone-900">
+                      {week.title}
+                    </h3>
+                    <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                      {week.description || week.focus}
+                    </p>
+                    <div className="mt-3 pt-3 border-t border-sand-200/80 text-[11px] text-stone-700">
+                      <span className="font-semibold text-stone-900">Pregunta rectora: </span>
+                      <span className="italic">"{week.daily_prompt_example || week.prompt_focus}"</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* REQUIREMENT 13: CYCLE COMPLETION & REFLECTION */}
+            <div className="pt-4 border-t border-sand-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-serif font-bold text-base text-stone-900">
+                  Cierre de Ciclo & Reflexión
+                </h4>
+                <p className="text-xs text-stone-600">
+                  Al completar este capítulo, plasma las 4 preguntas de integración antes de pasar al siguiente.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowReflectionModal(true)}
+                className="travesia-btn-secondary text-xs py-2.5 px-4 whitespace-nowrap"
+              >
+                Completar Reflexión del Ciclo
+              </button>
+            </div>
+          </div>
+
+          {/* Catalog of Upcoming Cycles */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sand-200 shadow-card space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-serif font-bold text-xl text-stone-900">
+                  Próximos Capítulos de la Comunidad
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
+                  La travesía nunca se detiene. Cada mes abordamos un territorio esencial del carácter y la vida interior.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-stone-500 bg-sand-100 px-3 py-1 rounded-full">
+                11 Ciclos Anuales
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-2">
+              {ongoingCycles.map((cycle, idx) => {
+                const isActive = cycle.id === currentCommunityCycle?.id;
+                return (
+                  <div
+                    key={cycle.id}
+                    className={`p-3.5 rounded-2xl border text-left ${
+                      isActive
+                        ? 'border-amber-400 bg-amber-50/60 shadow-sm'
+                        : 'border-sand-200 bg-sand-50/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                      <span>Ciclo {cycle.cycle_number}</span>
+                      {isActive && <span className="text-amber-700 font-bold">Activo</span>}
+                    </div>
+                    <p className="font-serif font-bold text-sm text-stone-900">
+                      {cycle.title}
+                    </p>
+                    <p className="text-[11px] text-stone-500 mt-1 line-clamp-2">
+                      {cycle.theme}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 3: MI RECORRIDO (MEMBER HISTORY TIMELINE - NO GAMIFICATION)          */}
+      {/* ========================================================================= */}
+      {activeTab === 'history' && (
+        <div className="space-y-6">
+          <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl space-y-3">
+            <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              <span>Memoria de Tu Caminar</span>
+            </span>
+            <h1 className="font-serif text-3xl sm:text-4xl font-bold">
+              Mi Recorrido
+            </h1>
+            <p className="text-sand-300 text-xs sm:text-sm max-w-xl leading-relaxed">
+              Una línea de tiempo sobria de tu constancia. Sin puntos ni tablas de clasificación artificiales: solo el registro honesto de los capítulos que has recorrido.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sand-200 shadow-card space-y-6">
+            <h2 className="font-serif text-xl font-bold text-stone-900 border-b border-sand-200 pb-3">
+              Línea Temporal de Crecimiento
+            </h2>
+
+            <div className="space-y-4">
+              {memberTimeline.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`p-5 rounded-2xl border flex items-start gap-4 transition-all ${
+                    item.status === 'completed'
+                      ? 'border-emerald-200 bg-emerald-50/30'
+                      : item.status === 'current'
+                      ? 'border-amber-400 bg-amber-50/40 shadow-sm'
+                      : 'border-sand-200 bg-sand-50/30 opacity-75'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5 ${
+                    item.status === 'completed'
+                      ? 'bg-emerald-600 text-white'
+                      : item.status === 'current'
+                      ? 'bg-amber-500 text-stone-950 font-bold'
+                      : 'bg-sand-200 text-stone-500'
+                  }`}>
+                    {item.status === 'completed' ? (
+                      <Check className="w-4 h-4" />
+                    ) : item.status === 'current' ? (
+                      '▶'
+                    ) : (
+                      idx + 1
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-serif font-bold text-base text-stone-900">
+                        {item.title}
+                      </h3>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        item.status === 'completed'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : item.status === 'current'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-sand-100 text-stone-500'
+                      }`}>
+                        {item.status === 'completed'
+                          ? '✓ Completado'
+                          : item.status === 'current'
+                          ? 'En Curso'
+                          : 'Próximo'}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                      {item.theme}
+                    </p>
+
+                    {item.completed_at && (
+                      <span className="text-[11px] text-stone-400 block mt-2">
+                        Completado el {new Date(item.completed_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: REFLEXIÓN DE FIN DE CICLO (4 PREGUNTAS CONTRACTUALES)               */}
+      {/* ========================================================================= */}
+      {showReflectionModal && (
+        <div className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-sand-200 space-y-5 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="border-b border-sand-200 pb-3">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full">
+                Cierre de Capítulo · {currentCommunityCycle?.title}
+              </span>
+              <h3 className="font-serif text-2xl font-bold text-stone-900 mt-1">
+                "Has completado este capítulo."
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-600 mt-1">
+                Tómate diez minutos para registrar lo vivido antes de iniciar el siguiente ciclo con la comunidad.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitReflection} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  1. ¿Qué has descubierto?
+                </label>
+                <textarea
+                  value={reflection1}
+                  onChange={(e) => setReflection1(e.target.value)}
+                  rows={2}
+                  required
+                  placeholder="Revelaciones honestas sobre tus patrones o tu vida interior..."
+                  className="w-full p-3 rounded-xl border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  2. ¿Qué ha cambiado?
+                </label>
+                <textarea
+                  value={reflection2}
+                  onChange={(e) => setReflection2(e.target.value)}
+                  rows={2}
+                  required
+                  placeholder="Acciones concretas, actitudes o decisiones tomadas..."
+                  className="w-full p-3 rounded-xl border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  3. ¿Qué quieres llevar contigo?
+                </label>
+                <textarea
+                  value={reflection3}
+                  onChange={(e) => setReflection3(e.target.value)}
+                  rows={2}
+                  required
+                  placeholder="Un principio, un límite o un hábito que no estás dispuesto a soltar..."
+                  className="w-full p-3 rounded-xl border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  4. ¿Qué quieres explorar ahora?
+                </label>
+                <textarea
+                  value={reflection4}
+                  onChange={(e) => setReflection4(e.target.value)}
+                  rows={2}
+                  required
+                  placeholder="Tu intención para el siguiente capítulo de la comunidad..."
+                  className="w-full p-3 rounded-xl border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-500"
+                />
+              </div>
+
+              {reflectionSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Reflexión guardada en tu historia personal. Pasando al siguiente capítulo...</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReflectionModal(false)}
+                  className="text-xs text-stone-600 hover:text-stone-900 px-4 py-2"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="travesia-btn-primary text-xs py-2 px-5"
+                >
+                  Guardar y Avanzar al Próximo Capítulo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

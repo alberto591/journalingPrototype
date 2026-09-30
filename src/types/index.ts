@@ -34,8 +34,78 @@ export interface Profile {
   subscription_status?: string;
   price_id?: string;
   current_period_start?: string;
-  current_period_end?: string;
+  // Continuous Retention Journey Architecture
+  journey_started_at?: string;
+  foundation_completed_at?: string | null;
+  current_cycle_id?: string;
+  current_cycle_week?: number;
+  current_day?: number;
+  billing_started_at?: string;
+  next_billing_date?: string;
 }
+
+export interface CycleWeek {
+  week_number: number;
+  title: string;
+  focus: string;
+  description?: string;
+  prompt_focus?: string;
+  daily_prompt_example?: string;
+}
+
+export interface OngoingCycle {
+  id: string;
+  cycle_number: number;
+  title: string;
+  theme: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  status: 'active' | 'upcoming' | 'completed';
+  weeks: CycleWeek[];
+}
+
+export interface CycleReflection {
+  id: string;
+  user_id: string;
+  cycle_id: string;
+  cycle_title: string;
+  discovered: string;        // ¿Qué has descubierto?
+  changed: string;           // ¿Qué ha cambiado?
+  carrying_forward: string;  // ¿Qué quieres llevar contigo?
+  explore_next: string;      // ¿Qué quieres explorar ahora?
+  completed_at: string;
+}
+
+export interface MemberHistoryItem {
+  id: string;
+  title: string;
+  type: 'foundation' | 'ongoing_cycle';
+  status: 'completed' | 'current' | 'upcoming';
+  cycle_number?: number;
+  completed_at?: string;
+  started_at?: string;
+  theme?: string;
+  description?: string;
+  summary?: string;
+}
+
+export interface ContinuousRetentionMetrics {
+  foundation_completion_rate: number;
+  cycle_completion_rate: number;
+  cycle_to_cycle_continuation_rate: number;
+  continuation_after_week_4_rate: number;
+  daily_practice_frequency_avg: number;
+  live_attendance_rate: number;
+  replay_usage_rate: number;
+  community_activity_rate: number;
+  renewal_intent_rate: number;
+  renewal_rate: number;
+  total_members_analyzed: number;
+  foundation_completed?: number;
+  active_in_ongoing_cycles?: number;
+}
+
 
 export interface Channel {
   id: string;
