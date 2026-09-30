@@ -632,3 +632,64 @@ ALTER TABLE public.content_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
+
+-- ====================================================================
+-- 14. CONTINUOUS RETENTION JOURNEY & ONGOING CYCLES
+-- ====================================================================
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS journey_started_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS foundation_completed_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS current_cycle_id TEXT DEFAULT 'cycle-relaciones';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS current_cycle_week INTEGER DEFAULT 2;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS billing_started_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 month');
+
+CREATE TABLE IF NOT EXISTS public.ongoing_cycles (
+  id TEXT PRIMARY KEY,
+  cycle_number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  theme TEXT NOT NULL,
+  description TEXT NOT NULL,
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('active', 'upcoming', 'completed')),
+  weeks JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.cycle_reflections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  cycle_id TEXT NOT NULL REFERENCES public.ongoing_cycles(id) ON DELETE CASCADE,
+  cycle_title TEXT NOT NULL,
+  discovered TEXT NOT NULL,
+  changed TEXT NOT NULL,
+  carrying_forward TEXT NOT NULL,
+  explore_next TEXT NOT NULL,
+  completed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.ongoing_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cycle_reflections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ongoing cycles viewable by everyone" ON public.ongoing_cycles;
+CREATE POLICY "Ongoing cycles viewable by everyone"
+  ON public.ongoing_cycles FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Admins manage ongoing cycles" ON public.ongoing_cycles;
+CREATE POLICY "Admins manage ongoing cycles"
+  ON public.ongoing_cycles FOR ALL
+  USING (auth.jwt()->>'role' = 'admin' OR EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+  ));
+
+DROP POLICY IF EXISTS "Users can view own reflections" ON public.cycle_reflections;
+CREATE POLICY "Users can view own reflections"
+  ON public.cycle_reflections FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own reflections" ON public.cycle_reflections;
+CREATE POLICY "Users can insert own reflections"
+  ON public.cycle_reflections FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
