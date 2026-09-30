@@ -5,6 +5,8 @@ import { Topbar } from './Topbar';
 import { RightSidebar } from './RightSidebar';
 import { MobileNav } from './MobileNav';
 import { DisclaimerBanner } from '../common/DisclaimerBanner';
+import { LiveSessionBanner } from '../events/LiveSessionBanner';
+import { TrialExpiredModal } from '../modals/TrialExpiredModal';
 
 export const AppShell: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -44,6 +46,7 @@ export const AppShell: React.FC = () => {
 
         {/* 4. Center Main Column (Header + Scrollable Outlet) */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <LiveSessionBanner />
           <Topbar onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)} />
           
           <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 pb-24 lg:pb-8">
@@ -63,6 +66,9 @@ export const AppShell: React.FC = () => {
 
       {/* 6. Mobile Bottom Nav */}
       <MobileNav />
+
+      {/* 7. Conversion Modal for Expired Trial Users (Once Per Session) */}
+      <TrialExpiredModal />
     </div>
   );
 };

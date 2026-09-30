@@ -2,27 +2,58 @@ import React, { useState } from 'react';
 import { useDataStore } from '../../lib/dataStore';
 import { SessionRecording } from '../../types';
 import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
+import { MembershipAccessGate } from '../modals/MembershipAccessGate';
 import { PlayCircle, Clock, Search } from 'lucide-react';
 
 
 export const ArchiveView: React.FC = () => {
-  const { recordings, currentUser } = useDataStore();
+  const { recordings, events, currentUser } = useDataStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRecordingModal, setActiveRecordingModal] = useState<SessionRecording | null>(null);
+  const [showAccessGate, setShowAccessGate] = useState(false);
+  const [selectedLockedRecording, setSelectedLockedRecording] = useState<SessionRecording | null>(null);
 
   const categories = [
     'Todas',
-    'Journaling',
-    'Visión',
-    'Obstáculos',
-    'Trabajo',
+    'El Presente',
+    'La Visión',
+    'Los Obstáculos',
+    'El Trabajo',
     'Relaciones',
     'Propósito',
-    'Espiritualidad'
+    'Espiritualidad',
+    'Journaling'
   ];
 
-  const filteredRecordings = recordings.filter(rec => {
+  // Combine direct recordings and any recorded events
+  const allRecordings = React.useMemo(() => {
+    const list = [...recordings];
+    events.forEach(evt => {
+      const alreadyIncluded = list.some(r => r.event_id === evt.id || r.id === evt.recording_id);
+      if (!alreadyIncluded && (evt.recording_url || evt.recording_id)) {
+        list.push({
+          id: evt.recording_id || `rec-${evt.id}`,
+          event_id: evt.id,
+          title: evt.title,
+          description: evt.description,
+          date: evt.date ? evt.date.split('T')[0] : '2026-09-28',
+          duration: `${evt.duration_minutes || 35} min`,
+          duration_seconds: (evt.duration_minutes || 35) * 60,
+          category: evt.theme || 'El Presente',
+          storage_path: evt.recording_storage_path || evt.recording_url,
+          video_url: evt.recording_url,
+          thumbnail_url: evt.thumbnail_url || 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+          status: 'AVAILABLE',
+          views_count: evt.attendees_count || 24,
+          is_member_only: true,
+        });
+      }
+    });
+    return list;
+  }, [recordings, events]);
+
+  const filteredRecordings = allRecordings.filter(rec => {
     const matchesCategory = selectedCategory === 'Todas' || rec.category === selectedCategory;
     const matchesQuery = 
       rec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -30,26 +61,25 @@ export const ArchiveView: React.FC = () => {
     return matchesCategory && matchesQuery;
   });
 
-
   return (
     <div className="max-w-5xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
       {/* Hero Header */}
       <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-block mb-3">
-            Hemeroteca de Sesiones
+            Hemeroteca de Sesiones en Directo
           </span>
           <h1 className="font-serif text-2xl sm:text-3xl font-bold">
-            Archivo de Grabaciones
+            Grabaciones de Sesiones en Directo
           </h1>
           <p className="text-sand-300 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed">
-            Todas las sesiones guiadas matutinas y mentorías grabadas en video protegido por RLS para que nunca te quedes atrás en el camino.
+            Aquí tienes acceso a todas las sesiones de práctica matutina y mentorías en vivo grabadas para que practiques a tu propio ritmo.
           </p>
         </div>
 
         <div className="text-right flex-shrink-0">
-          <p className="font-serif font-bold text-3xl text-amber-400">{recordings.length}</p>
-          <p className="text-xs text-sand-400">Sesiones disponibles</p>
+          <p className="font-serif font-bold text-3xl text-amber-400">{allRecordings.length}</p>
+          <p className="text-xs text-sand-400">Grabaciones disponibles</p>
         </div>
       </div>
 
@@ -93,7 +123,14 @@ export const ArchiveView: React.FC = () => {
           >
             {/* Thumbnail */}
             <div 
-              onClick={() => setActiveRecordingModal(rec)}
+              onClick={() => {
+                if (currentUser?.membership_status === 'EXPIRED') {
+                  setSelectedLockedRecording(rec);
+                  setShowAccessGate(true);
+                  return;
+                }
+                setActiveRecordingModal(rec);
+              }}
               className="relative aspect-video bg-stone-900 cursor-pointer overflow-hidden"
             >
               <img
@@ -140,13 +177,26 @@ export const ArchiveView: React.FC = () => {
               <div className="pt-3 border-t border-sand-100 flex items-center justify-between">
                 <span className="text-[11px] text-stone-400">{rec.views_count} reproducciones</span>
                 {(rec.storage_path || rec.video_url || rec.external_url) ? (
-                  <button
-                    onClick={() => setActiveRecordingModal(rec)}
-                    className="travesia-btn-accent text-xs py-1.5 px-3 font-semibold text-stone-950 flex items-center gap-1 shadow-xs hover:brightness-105"
-                  >
-                    <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
-                    <span>VER GRABACIÓN</span>
-                  </button>
+                  currentUser?.membership_status === 'EXPIRED' ? (
+                    <button
+                      onClick={() => {
+                        setSelectedLockedRecording(rec);
+                        setShowAccessGate(true);
+                      }}
+                      className="travesia-btn-accent text-xs py-1.5 px-3 font-semibold text-stone-950 flex items-center gap-1 shadow-xs hover:brightness-105"
+                      title="Grabación disponible para miembros"
+                    >
+                      <span>CONTINUAR EN TRAVESÍA</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setActiveRecordingModal(rec)}
+                      className="travesia-btn-accent text-xs py-1.5 px-3 font-semibold text-stone-950 flex items-center gap-1 shadow-xs hover:brightness-105"
+                    >
+                      <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
+                      <span>VER REPLAY</span>
+                    </button>
+                  )
                 ) : null}
               </div>
             </div>
@@ -159,6 +209,14 @@ export const ArchiveView: React.FC = () => {
         recording={activeRecordingModal}
         isOpen={Boolean(activeRecordingModal)}
         onClose={() => setActiveRecordingModal(null)}
+      />
+
+      {/* Membership Access Gate for Expired Users */}
+      <MembershipAccessGate
+        isOpen={showAccessGate}
+        onClose={() => setShowAccessGate(false)}
+        featureTitle={selectedLockedRecording?.title}
+        sourceContext="archive_recording"
       />
     </div>
   );

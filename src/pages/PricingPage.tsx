@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -22,14 +22,27 @@ import { BusinessSettings } from '../types';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { members } = useDataStore();
+  const location = useLocation();
+  const { members, currentUser } = useDataStore();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_BUSINESS_SETTINGS);
   const [showManualTransferModal, setShowManualTransferModal] = useState<boolean>(false);
 
+  const searchParams = new URLSearchParams(location.search);
+  const fromSource = searchParams.get('from');
+  const isFromTrialExpiry = fromSource === 'trial_expired' || fromSource === 'access_gate' || fromSource === 'dashboard_expired' || fromSource === 'live_session_expired' || fromSource === 'live_banner_expired' || currentUser?.membership_status === 'EXPIRED';
+
   useEffect(() => {
     businessService.getSettings().then(setSettings);
-    analyticsService.track('membership_page_viewed', {});
+    analyticsService.track('membership_page_viewed', {
+      from: fromSource || 'direct',
+    }, currentUser?.id);
+
+    if (isFromTrialExpiry) {
+      analyticsService.track('membership_page_from_trial_expiry', {
+        source: fromSource || 'expired_status',
+      }, currentUser?.id);
+    }
   }, []);
 
   // Real database calculation: 20 - active_founders (never hardcoded)
@@ -81,6 +94,31 @@ export const PricingPage: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 space-y-12">
+        {/* Trial Expiry Continúa tu práctica Banner */}
+        {isFromTrialExpiry && (
+          <div className="p-6 rounded-3xl bg-amber-50/80 border border-amber-200/80 shadow-sm space-y-3 animate-fade-in text-left">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full">
+                Miembro fundador · 29 €/mes
+              </span>
+              <span className="text-xs text-stone-500">Tus diarios permanecen guardados</span>
+            </div>
+            <h2 className="font-serif font-bold text-2xl text-stone-900 leading-tight">
+              Continúa tu práctica
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-sans">
+              Tu prueba de 7 días ha terminado, pero tus reflexiones y compromisos siguen a salvo en tu cuenta. Para mantener el hábito y continuar acompañado cada mañana, activa tu plaza de fundador.
+            </p>
+            <div className="pt-2 border-t border-amber-200/60 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs text-stone-800">
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Sesiones en directo</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Grabaciones</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Nuevos ciclos</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Comunidad</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> Práctica diaria</span>
+            </div>
+          </div>
+        )}
+
         {/* Title & Positioning */}
         <div className="text-center space-y-4 max-w-2xl mx-auto">
           <span className="text-[11px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 px-3.5 py-1 rounded-full">

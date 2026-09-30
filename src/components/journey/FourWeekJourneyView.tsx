@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
 import { 
   Sparkles, 
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 
 export const FourWeekJourneyView: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     currentUser, 
     updateCurrentUserProfile,
@@ -385,6 +387,14 @@ export const FourWeekJourneyView: React.FC = () => {
                   className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
                 >
                   <span>Empezar mi próximo capítulo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : currentUser?.membership_status === 'EXPIRED' ? (
+                <button
+                  onClick={() => navigate('/membership?from=ongoing_cycles_expired')}
+                  className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
+                >
+                  <span>CONTINUAR EN TRAVESÍA</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (

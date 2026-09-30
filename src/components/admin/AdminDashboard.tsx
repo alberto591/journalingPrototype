@@ -55,7 +55,9 @@ import {
   Edit2,
   PlayCircle,
   Loader2,
-  Link2
+  Link2,
+  Radio,
+  Square
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -73,6 +75,9 @@ export const AdminDashboard: React.FC = () => {
     addEvent,
     updateEvent,
     deleteEvent,
+    startLiveSession,
+    endLiveSession,
+    liveEvent,
     uploadSessionRecording,
     deleteSessionRecording,
     ongoingCycles,
@@ -134,6 +139,7 @@ export const AdminDashboard: React.FC = () => {
   const [newEventZoomUrl, setNewEventZoomUrl] = useState('');
   const [newEventType, setNewEventType] = useState<'standard' | 'coaching'>('standard');
   const [newEventPrompt, setNewEventPrompt] = useState('');
+  const [newEventStatus, setNewEventStatus] = useState<string>('upcoming');
 
   // Selected session and recording states
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -212,6 +218,7 @@ export const AdminDashboard: React.FC = () => {
     setNewEventHost(currentUser.name || 'Alberto Calvo');
     setNewEventZoomUrl('');
     setNewEventPrompt('');
+    setNewEventStatus('upcoming');
     setEditingEvent(null);
     setShowAddEventModal(false);
   };
@@ -232,6 +239,7 @@ export const AdminDashboard: React.FC = () => {
     setNewEventHost(evt.host_name || currentUser.name);
     setNewEventZoomUrl(evt.meeting_url || evt.zoom_meeting_url || '');
     setNewEventPrompt(evt.prompt || '');
+    setNewEventStatus(evt.status || 'upcoming');
     setShowAddEventModal(true);
   };
 
@@ -256,6 +264,7 @@ export const AdminDashboard: React.FC = () => {
         meeting_url: zoomUrl,
         zoom_meeting_url: zoomUrl,
         prompt: newEventPrompt.trim() || undefined,
+        status: (newEventStatus as any) || 'upcoming',
       });
       triggerSuccessFeedback('Sesión actualizada correctamente.');
     } else {
@@ -273,7 +282,7 @@ export const AdminDashboard: React.FC = () => {
         meeting_url: zoomUrl,
         zoom_meeting_url: zoomUrl,
         prompt: newEventPrompt.trim() || undefined,
-        status: 'upcoming',
+        status: (newEventStatus as any) || 'upcoming',
       });
       triggerSuccessFeedback('Nueva sesión creada y guardada en Supabase.');
     }
@@ -1461,6 +1470,11 @@ export const AdminDashboard: React.FC = () => {
                             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
                               Tema: {event.theme || event.weekly_theme || 'El Presente'}
                             </span>
+                            {(event.status === 'live' || event.status === 'LIVE') && (
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse">
+                                🔴 EN DIRECTO AHORA
+                              </span>
+                            )}
                             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
                               hasRecording
                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -1548,6 +1562,8 @@ export const AdminDashboard: React.FC = () => {
                   recordings.some(r => r.event_id === activeSession.id || r.id === activeSession.recording_id)
                 );
 
+                const isActiveLive = activeSession.status === 'live' || activeSession.status === 'LIVE';
+
                 return (
                   <div className="travesia-card p-5 space-y-5 bg-white border-sand-300 shadow-sm">
                     {/* Header info */}
@@ -1591,6 +1607,105 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* SECTION: CONTROL DE REUNIÓN (ZOOM) Y ESTADO (TRAVESÍA) */}
+                    <div className="p-4 rounded-2xl bg-sand-50 border border-sand-200 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Radio className="w-4 h-4 text-rose-600" />
+                          <h5 className="font-serif font-bold text-xs uppercase tracking-wider text-stone-900">
+                            Estado de la Sesión
+                          </h5>
+                        </div>
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                          isActiveLive
+                            ? 'bg-rose-600 text-white animate-pulse'
+                            : 'bg-stone-200 text-stone-700'
+                        }`}>
+                          {isActiveLive ? '🔴 EN DIRECTO' : 'PROGRAMADA'}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        {isActiveLive
+                          ? 'La sesión está marcada como en directo en Travesía. Los miembros ven la notificación con el botón para entrar a Zoom.'
+                          : 'Abre la reunión en Zoom como anfitrión y luego marca la sesión como en directo en Travesía para notificar a la comunidad.'}
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {/* 1. ZOOM HOST */}
+                        <div className="p-3.5 bg-white rounded-xl border border-sand-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono font-bold text-stone-500 uppercase tracking-wider">
+                              ZOOM
+                            </span>
+                            <span className="text-[10px] text-stone-400">Reunión en vivo</span>
+                          </div>
+                          {activeSession.meeting_url ? (
+                            <a
+                              href={activeSession.meeting_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="travesia-btn-secondary text-xs py-2 px-3 w-full flex items-center justify-center gap-1.5 font-bold text-stone-900 hover:bg-sand-100"
+                            >
+                              <Video className="w-3.5 h-3.5 text-blue-600" />
+                              <span>ABRIR ZOOM</span>
+                              <ExternalLink className="w-3 h-3 text-stone-400" />
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-rose-600 block italic">Sin enlace de Zoom</span>
+                          )}
+                          <p className="text-[10px] text-stone-400 leading-tight">
+                            Inicia o finaliza la llamada en tu aplicación de Zoom.
+                          </p>
+                        </div>
+
+                        {/* 2. TRAVESÍA COMMUNITY STATE */}
+                        <div className="p-3.5 bg-white rounded-xl border border-sand-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono font-bold text-stone-500 uppercase tracking-wider">
+                              TRAVESÍA
+                            </span>
+                            <span className="text-[10px] text-stone-400">Notificación miembros</span>
+                          </div>
+                          {isActiveLive ? (
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('¿Deseas marcar la sesión como finalizada en Travesía?\n\nRecuerda finalizar también la reunión en la app de Zoom.')) {
+                                  await endLiveSession(activeSession.id);
+                                  triggerSuccessFeedback('Sesión marcada como finalizada en Travesía.');
+                                }
+                              }}
+                              className="w-full text-xs py-2 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-100 font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                            >
+                              <Square className="w-3 h-3 fill-sand-300 text-sand-300" />
+                              <span>MARCAR COMO FINALIZADA</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                const zoom = activeSession.meeting_url || activeSession.zoom_meeting_url;
+                                if (!zoom) {
+                                  const inputUrl = window.prompt('Introduce la URL de reunión de Zoom para los miembros:', 'https://zoom.us/j/');
+                                  if (!inputUrl) return;
+                                  await startLiveSession(activeSession.id, inputUrl);
+                                } else {
+                                  await startLiveSession(activeSession.id);
+                                }
+                                triggerSuccessFeedback('Sesión marcada como en directo. Notificación visible para miembros.');
+                              }}
+                              className="w-full text-xs py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                            >
+                              <Radio className="w-3.5 h-3.5" />
+                              <span>MARCAR COMO EN DIRECTO</span>
+                            </button>
+                          )}
+                          <p className="text-[10px] text-stone-400 leading-tight">
+                            {isActiveLive ? 'Retira la notificación y permite subir el MP4.' : 'Muestra "🔴 EN DIRECTO" y el enlace a los miembros.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* SECTION: GRABACIÓN */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -1623,7 +1738,7 @@ export const AdminDashboard: React.FC = () => {
                               className="travesia-btn-accent text-xs py-2 px-3.5 font-bold text-stone-950 flex items-center gap-1.5 shadow-sm"
                             >
                               <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
-                              <span>VER GRABACIÓN</span>
+                              <span>VER REPLAY</span>
                             </button>
 
                             <button
@@ -2205,6 +2320,22 @@ export const AdminDashboard: React.FC = () => {
                     <span>Aviso: La URL introducida no parece ser un dominio legítimo de Zoom (*.zoom.us).</span>
                   </p>
                 )}
+              </div>
+
+              {/* 9. Estado de la sesión */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Estado de la sesión:
+                </label>
+                <select
+                  value={newEventStatus}
+                  onChange={(e) => setNewEventStatus(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-sand-50 border border-sand-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
+                >
+                  <option value="upcoming">Programada (Próxima)</option>
+                  <option value="live">🔴 ¡En directo ahora!</option>
+                  <option value="finished">Finalizada / En hemeroteca</option>
+                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-sand-100">

@@ -6,7 +6,8 @@ import {
   ChevronRight, 
   CheckCheck, 
   LogOut,
-  Menu
+  Menu,
+  Video
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 import { SearchModal } from '../common/SearchModal';
@@ -23,7 +24,9 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
     signOut, 
     notifications, 
     markNotificationAsRead, 
-    markAllNotificationsAsRead 
+    markAllNotificationsAsRead,
+    liveEvent,
+    trackZoomJoinClick
   } = useDataStore();
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -148,8 +151,26 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
             </button>
           </div>
 
-          {/* Right: Search icon (mobile) + Notifications + Avatar */}
+          {/* Right: Live pill + Search icon (mobile) + Notifications + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Live Indicator Pill (if live) */}
+            {liveEvent && (
+              <button
+                onClick={async () => {
+                  await trackZoomJoinClick(liveEvent.id);
+                  const zoom = liveEvent.meeting_url || liveEvent.zoom_meeting_url;
+                  if (zoom) window.open(zoom, '_blank', 'noopener,noreferrer');
+                  else navigate('/events');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-mono text-[11px] font-bold shadow-sm transition-all animate-pulse"
+                title="Sesión en directo en curso: Pulsa para entrar a Zoom"
+              >
+                <span className="w-2 h-2 rounded-full bg-white" />
+                <span className="hidden sm:inline">EN DIRECTO</span>
+                <Video className="w-3.5 h-3.5 ml-0.5" />
+              </button>
+            )}
+
             {/* Mobile Search Button */}
             <button
               onClick={() => setIsSearchOpen(true)}
@@ -166,8 +187,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
                 aria-label="Notificaciones"
               >
                 <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-bronze-600 ring-2 ring-white animate-pulse" />
+                {(unreadCount > 0 || liveEvent) && (
+                  <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-white animate-pulse ${liveEvent ? 'bg-rose-600' : 'bg-bronze-600'}`} />
                 )}
               </button>
 
@@ -188,6 +209,49 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
                       </button>
                     )}
                   </div>
+
+                  {/* Pinned Live Session Card inside Notifications */}
+                  {liveEvent && (
+                    <div className="p-3.5 bg-gradient-to-r from-amber-50 to-rose-50/60 border-b border-amber-200/80">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+                        </span>
+                        <span className="text-[10px] font-mono font-bold uppercase text-rose-700 tracking-wider">
+                          EN DIRECTO
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-stone-900 leading-snug">{liveEvent.title}</p>
+                      <p className="text-[11px] text-stone-600 mt-0.5">Facilitador: {liveEvent.host_name}</p>
+                      {currentUser?.membership_status === 'EXPIRED' ? (
+                        <button
+                          onClick={() => {
+                            navigate('/membership?from=notification_live_expired');
+                            setIsNotificationsOpen(false);
+                          }}
+                          className="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                        >
+                          <span>CONTINUAR EN TRAVESÍA</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            await trackZoomJoinClick(liveEvent.id);
+                            const zoom = liveEvent.meeting_url || liveEvent.zoom_meeting_url;
+                            if (zoom) window.open(zoom, '_blank', 'noopener,noreferrer');
+                            else navigate('/events');
+                            setIsNotificationsOpen(false);
+                          }}
+                          className="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-amber-300 font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>ENTRAR EN ZOOM</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <div className="max-h-80 overflow-y-auto divide-y divide-sand-100">
                     {notifications.length === 0 ? (
                       <div className="py-8 text-center text-xs text-stone-400">
@@ -197,9 +261,16 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
                       notifications.map(n => (
                         <div
                           key={n.id}
-                          onClick={() => {
+                          onClick={async () => {
                             markNotificationAsRead(n.id);
-                            if (n.link) navigate(n.link);
+                            if (n.link) {
+                              if (n.link.startsWith('http')) {
+                                if (liveEvent) await trackZoomJoinClick(liveEvent.id);
+                                window.open(n.link, '_blank', 'noopener,noreferrer');
+                              } else {
+                                navigate(n.link);
+                              }
+                            }
                             setIsNotificationsOpen(false);
                           }}
                           className={`p-3.5 hover:bg-sand-50 transition-colors cursor-pointer flex gap-3 items-start ${!n.read ? 'bg-amber-50/30' : ''}`}

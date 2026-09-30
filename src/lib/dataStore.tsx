@@ -69,11 +69,14 @@ interface DataStoreContextType {
   // Events
   events: EventItem[];
   nextUpcomingEvent: EventItem | null;
+  liveEvent: EventItem | null;
   toggleRegisterEvent: (eventId: string) => Promise<void>;
   addEvent: (event: Omit<EventItem, 'id' | 'attendees_count' | 'user_is_registered'>) => Promise<void>;
   updateEvent: (eventId: string, updates: Partial<EventItem>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   trackZoomJoinClick: (eventId: string) => Promise<void>;
+  startLiveSession: (eventId: string, zoomMeetingUrl?: string) => Promise<void>;
+  endLiveSession: (eventId: string) => Promise<void>;
 
   // Lessons
   lessons: Lesson[];
@@ -463,14 +466,19 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return userJournalSessions.find(s => s.date === todayStr && s.status === 'completed') || null;
   }, [userJournalSessions, todayStr]);
 
+  // Live event check
+  const liveEvent = useMemo(() => {
+    return events.find(e => e.status === 'live' || e.status === 'LIVE') || null;
+  }, [events]);
+
   // Next upcoming event calculated dynamically
   const nextUpcomingEvent = useMemo(() => {
-    const now = new Date().getTime();
+    if (liveEvent) return liveEvent;
     const upcoming = events
-      .filter(e => e.status === 'upcoming' || e.status === 'live')
+      .filter(e => e.status === 'upcoming' || e.status === 'live' || e.status === 'SCHEDULED' || e.status === 'LIVE')
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return upcoming[0] || null;
-  }, [events]);
+  }, [events, liveEvent]);
 
   // Deterministic Today's Daily Prompt based on day of year & active week
   const todayPrompt = useMemo(() => {
@@ -773,6 +781,29 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const startLiveSession = async (eventId: string, zoomMeetingUrl?: string) => {
+    await adminService.assertAdmin(currentUser.id);
+    const updates: Partial<EventItem> = {
+      status: 'live',
+      ...(zoomMeetingUrl ? { meeting_url: zoomMeetingUrl, zoom_meeting_url: zoomMeetingUrl } : {})
+    };
+    if (isSupabaseConfigured) {
+      await eventsService.updateEvent(eventId, updates);
+    }
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...updates } : e));
+  };
+
+  const endLiveSession = async (eventId: string) => {
+    await adminService.assertAdmin(currentUser.id);
+    const updates: Partial<EventItem> = {
+      status: 'finished',
+    };
+    if (isSupabaseConfigured) {
+      await eventsService.updateEvent(eventId, updates);
+    }
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...updates } : e));
+  };
+
   const uploadSessionRecording = async (
     eventId: string,
     file: File,
@@ -909,6 +940,26 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
+  // Merge live session dynamic notification
+  const effectiveNotifications = useMemo(() => {
+    const list = [...notifications];
+    if (liveEvent) {
+      const zoomUrl = liveEvent.meeting_url || liveEvent.zoom_meeting_url || '/events';
+      const liveNotif: NotificationItem = {
+        id: `notif-live-${liveEvent.id}`,
+        user_id: currentUser.id,
+        type: 'session',
+        title: `🔴 ¡ESTAMOS EN DIRECTO AHORA!`,
+        message: `${liveEvent.title} — Facilitado por ${liveEvent.host_name}. Pulsa para entrar a la sala de Zoom.`,
+        link: zoomUrl,
+        read: false,
+        created_at: new Date().toISOString(),
+      };
+      return [liveNotif, ...list.filter(n => n.id !== liveNotif.id)];
+    }
+    return list;
+  }, [notifications, liveEvent, currentUser.id]);
+
   const saveOnboarding = (data: OnboardingData) => {
     setOnboardingData(data);
     localStorage.setItem(`${STORAGE_KEY_PREFIX}onboarding`, JSON.stringify(data));
@@ -956,11 +1007,14 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         deletePost,
         events,
         nextUpcomingEvent,
+        liveEvent,
         toggleRegisterEvent,
         addEvent,
         updateEvent,
         deleteEvent,
         trackZoomJoinClick,
+        startLiveSession,
+        endLiveSession,
         lessons,
         completeLesson,
         books,
@@ -982,7 +1036,7 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         computedCompletedSessionsCount,
         computedReflectionMinutes,
         members,
-        notifications,
+        notifications: effectiveNotifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         onboardingData,

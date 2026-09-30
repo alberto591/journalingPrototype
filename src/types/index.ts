@@ -481,7 +481,13 @@ export type AnalyticsEventType =
   | 'membership_page_viewed'
   | 'checkout_started'
   | 'subscription_started'
-  | 'subscription_cancelled';
+  | 'subscription_cancelled'
+  | 'trial_expired_modal_viewed'
+  | 'trial_expired_modal_dismissed'
+  | 'trial_expired_modal_cta_clicked'
+  | 'expired_content_gate_viewed'
+  | 'expired_content_gate_cta_clicked'
+  | 'membership_page_from_trial_expiry';
 
 export interface AnalyticsEvent {
   id: string;

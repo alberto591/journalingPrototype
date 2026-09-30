@@ -20,7 +20,9 @@ import {
   TrendingUp,
   Filter,
   Users,
-  AlertCircle
+  AlertCircle,
+  Film,
+  Radio
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -31,6 +33,7 @@ export const DashboardPage: React.FC = () => {
     events, 
     recordings,
     nextUpcomingEvent,
+    liveEvent,
     todayJournalSession, 
     toggleRegisterEvent,
     trackZoomJoinClick,
@@ -77,6 +80,13 @@ export const DashboardPage: React.FC = () => {
 
   const handleEnterZoom = async (eventItem: EventItem) => {
     setZoomError(null);
+
+    // 0. Guard: Expired users cannot enter Zoom
+    if (currentUser.membership_status === 'EXPIRED') {
+      navigate('/membership?from=zoom_expired_attempt');
+      return;
+    }
+
     const zoomUrl = eventItem.meeting_url || eventItem.zoom_meeting_url;
     
     // 1. Validate that the URL is a valid Zoom URL
@@ -101,13 +111,59 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 1. FIRST PRIORITY: TU PRÁCTICA DE HOY */}
+      {/* LIVE EVENT CALLOUT (IF BROADCASTING) */}
+      {liveEvent && (
+        <div className="bg-gradient-to-r from-stone-950 via-stone-900 to-amber-950 text-sand-50 rounded-3xl p-6 sm:p-7 shadow-2xl border-2 border-rose-500/70 relative overflow-hidden animate-pulse">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-2 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600 text-white font-mono text-xs font-bold uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-white" />
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>EN DIRECTO</span>
+                </span>
+                <span className="text-xs text-amber-300 font-mono">Zoom Room Abierta</span>
+              </div>
+              <h2 className="font-serif font-bold text-2xl text-sand-50">
+                {liveEvent.title}
+              </h2>
+              <p className="text-xs text-sand-300 leading-relaxed">
+                Facilitado por <strong className="text-white">{liveEvent.host_name}</strong>. Únete ahora para la práctica matutina y discernimiento guiado en directo.
+              </p>
+            </div>
+
+            <div className="flex-shrink-0">
+              {currentUser.membership_status === 'EXPIRED' ? (
+                <div className="flex flex-col sm:items-end gap-1.5">
+                  <span className="text-xs text-amber-300 font-medium">Tu prueba ha terminado.</span>
+                  <button
+                    onClick={() => navigate('/membership?from=live_session_expired')}
+                    className="w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs py-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-xl transition-all"
+                  >
+                    <span>CONTINUAR EN TRAVESÍA</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleEnterZoom(liveEvent)}
+                  className="w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs py-3.5 px-6 rounded-2xl flex items-center justify-center gap-2 shadow-xl hover:scale-105 transition-all"
+                >
+                  <Video className="w-4 h-4 fill-stone-950" />
+                  <span>ENTRAR EN ZOOM</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1. FIRST PRIORITY: TU PRÁCTICA DE HOY / ESTADO EXPIRED */}
       <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-stone-800">
         <div className="relative z-10 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800 pb-3">
             <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-widest font-bold px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 font-mono">
-                1. TU PRÁCTICA DE HOY
+                {currentUser.membership_status === 'EXPIRED' ? 'MEMBRESÍA' : '1. TU PRÁCTICA DE HOY'}
               </span>
               <span className="text-xs text-sand-400">
                 {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -115,44 +171,75 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-xs text-amber-400">
               <Flame className="w-3.5 h-3.5" />
-              <span>Racha: <strong className="text-white">{currentUser.streak_days} días</strong></span>
+              <span>Racha histórica: <strong className="text-white">{currentUser.streak_days} días</strong></span>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2 max-w-xl">
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-sand-50 leading-tight">
-                {todayJournalSession 
-                  ? 'Has cumplido con tu quietud diaria' 
-                  : 'Frena 25 minutos. Silencia el ruido y escucha.'}
-              </h2>
-              <p className="text-xs text-sand-300 leading-relaxed font-sans">
-                {todayJournalSession 
-                  ? `Compromiso sellado: "${todayJournalSession.action_commitment}"` 
-                  : 'Los 5 Movimientos te esperan: Frenar, Descargar, Nombrar la Realidad, Escuchar y fijar Una Sola Acción.'}
-              </p>
-            </div>
+          {currentUser.membership_status === 'EXPIRED' ? (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-xl">
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-sand-50 leading-tight">
+                  Tu prueba de 7 días ha terminado.
+                </h2>
+                <p className="text-xs text-sand-300 leading-relaxed font-sans">
+                  Tu diario sigue aquí. Puedes retomarlo cuando quieras.
+                </p>
+                <p className="text-[11px] text-sand-400">
+                  Activa tu membresía para recuperar el acceso a las sesiones en directo, las grabaciones, los nuevos ciclos y la comunidad.
+                </p>
+              </div>
 
-            <div className="flex-shrink-0">
-              {todayJournalSession ? (
+              <div className="flex-shrink-0 flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => navigate('/membership?from=dashboard_expired')}
+                  className="w-full sm:w-auto travesia-btn-accent text-xs py-3.5 px-6 font-bold shadow-xl flex items-center justify-center gap-2 text-stone-950"
+                >
+                  <span>CONTINUAR EN TRAVESÍA</span>
+                </button>
                 <button
                   onClick={() => navigate('/journal')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3 px-6 rounded-2xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md"
+                  className="w-full sm:w-auto py-3 px-4 rounded-xl text-xs font-semibold text-sand-300 hover:text-white hover:bg-stone-800 transition-colors"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Ver mi reflexión de hoy</span>
+                  Ver mis diarios guardados
                 </button>
-              ) : (
-                <button
-                  onClick={() => navigate('/journal')}
-                  className="w-full sm:w-auto travesia-btn-accent text-xs py-3.5 px-8 font-bold shadow-xl flex items-center justify-center gap-2 text-stone-950"
-                >
-                  <PenLine className="w-4 h-4" />
-                  <span>Empezar práctica ahora →</span>
-                </button>
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-xl">
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-sand-50 leading-tight">
+                  {todayJournalSession 
+                    ? 'Has cumplido con tu quietud diaria' 
+                    : 'Frena 25 minutos. Silencia el ruido y escucha.'}
+                </h2>
+                <p className="text-xs text-sand-300 leading-relaxed font-sans">
+                  {todayJournalSession 
+                    ? `Compromiso sellado: "${todayJournalSession.action_commitment}"` 
+                    : 'Los 5 Movimientos te esperan: Frenar, Descargar, Nombrar la Realidad, Escuchar y fijar Una Sola Acción.'}
+                </p>
+              </div>
+
+              <div className="flex-shrink-0">
+                {todayJournalSession ? (
+                  <button
+                    onClick={() => navigate('/journal')}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3 px-6 rounded-2xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Ver mi reflexión de hoy</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/journal')}
+                    className="w-full sm:w-auto travesia-btn-accent text-xs py-3.5 px-8 font-bold shadow-xl flex items-center justify-center gap-2 text-stone-950"
+                  >
+                    <PenLine className="w-4 h-4" />
+                    <span>Empezar práctica ahora →</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -242,6 +329,31 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* REPLAY & RECORDINGS LIBRARY SHORTCUT */}
+      <div className="travesia-card p-4 sm:p-5 bg-sand-100/70 border border-sand-300/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-subtle">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-stone-900 text-amber-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Film className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-serif font-bold text-sm text-stone-900">
+              Hemeroteca de Grabaciones en Directo
+            </h4>
+            <p className="text-xs text-stone-500">
+              ¿Te perdiste alguna sesión matutina o mentoría? Mira las grabaciones organizadas por temática.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => navigate('/archive')}
+          className="travesia-btn-secondary text-xs py-2 px-4 whitespace-nowrap flex items-center gap-1.5 self-start sm:self-center font-semibold text-stone-800 hover:bg-sand-200"
+        >
+          <span>Ver grabaciones ({recordings.length})</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
 
       {/* 3. THIRD PRIORITY: TU RECORRIDO vs TU PRÓXIMO CAPÍTULO */}

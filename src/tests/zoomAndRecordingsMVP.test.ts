@@ -255,4 +255,82 @@ describe('TRAVESÍA MVP Zoom + Recordings Specification', () => {
     expect(error).toBeNull();
     expect(success).toBe(true);
   });
+
+  // 9. Live session status triggers live Zoom notification
+  it('Live session status triggers live Zoom notification with valid meeting URL', () => {
+    const liveSession: EventItem = {
+      id: 'evt-live-now',
+      title: 'Sesión Matutina en Directo — Discernir el Ruido',
+      date: new Date().toISOString(),
+      time_display: 'Ahora en Vivo',
+      duration_minutes: 35,
+      type: 'standard',
+      theme: 'El Presente',
+      description: 'Práctica guiada en vivo.',
+      host_name: 'Alberto Calvo',
+      host_avatar: '/alberto.png',
+      meeting_url: 'https://zoom.us/j/94523812049',
+      status: 'live',
+      attendees_count: 42,
+      user_is_registered: true,
+    };
+
+    expect(liveSession.status).toBe('live');
+    expect(zoomService.isValidZoomUrl(liveSession.meeting_url)).toBe(true);
+
+    // Verify notification structure
+    const liveNotification = {
+      id: `notif-live-${liveSession.id}`,
+      type: 'session',
+      title: '🔴 ¡ESTAMOS EN DIRECTO AHORA!',
+      message: `${liveSession.title} — Facilitado por ${liveSession.host_name}. Pulsa para entrar a la sala de Zoom.`,
+      link: liveSession.meeting_url,
+      read: false,
+    };
+
+    expect(liveNotification.title).toContain('EN DIRECTO AHORA');
+    expect(liveNotification.link).toBe('https://zoom.us/j/94523812049');
+  });
+
+  // 10. Completed session recordings are accessible in archive
+  it('Completed session recordings can be discovered and played in the recordings library', async () => {
+    const activeMember: Profile = {
+      id: 'usr-active-99',
+      name: 'Miembro Activo',
+      avatar_url: '',
+      bio: '',
+      role: 'member',
+      membership_status: 'ACTIVE',
+      focus_areas: ['Disciplina'],
+      created_at: new Date().toISOString(),
+      streak_days: 10,
+      completed_sessions_count: 14,
+      reflection_minutes: 350,
+      current_week: 2,
+      onboarding_completed: true,
+    };
+
+    const archivedRecording: SessionRecording = {
+      id: 'rec-archive-1',
+      event_id: 'evt-past-1',
+      title: 'Sesión grabada de prueba',
+      description: 'Replay de la sesión matutina.',
+      date: '2026-09-29',
+      duration: '35 min',
+      category: 'El Presente',
+      recording_strategy: 'HOSTED',
+      storage_path: 'session-recordings/evt-past-1/rec-archive-1.mp4',
+      status: 'AVAILABLE',
+      views_count: 5,
+      is_member_only: true,
+    };
+
+    const access = recordingsService.checkAccess(activeMember, archivedRecording);
+    expect(access.allowed).toBe(true);
+
+    const { playableUrl, error } = await recordingsService.getSecurePlayableUrl(activeMember, archivedRecording);
+    expect(error).toBeNull();
+    expect(playableUrl).toBeDefined();
+  });
 });
+

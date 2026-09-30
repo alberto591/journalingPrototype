@@ -273,6 +273,22 @@ export const journeyService = {
   // ------------------------------------------------------------------
   // 3. INDEPENDENT BILLING CYCLE CALCULATION (NEVER TIED TO 1ST OF MONTH)
   // ------------------------------------------------------------------
+  /**
+   * Safely adds one month without skipping shorter months (e.g. Jan 31 -> Feb 28/29, Mar 31 -> Apr 30)
+   */
+  addOneMonthSafe(date: Date): Date {
+    const target = new Date(date);
+    const originalDay = date.getDate();
+    target.setMonth(target.getMonth() + 1);
+    
+    // If day changed due to month length mismatch (e.g. Jan 31 overflowed into March)
+    if (target.getDate() !== originalDay) {
+      // Set to the last day of the intended month
+      target.setDate(0);
+    }
+    return target;
+  },
+
   calculateBillingDates(user: Profile): {
     billingStartedAt: string;
     nextBillingDate: string;
@@ -281,16 +297,19 @@ export const journeyService = {
     const billingStartedAt = user.billing_started_at || user.membership_started_at || user.created_at || new Date().toISOString();
     const startDate = new Date(billingStartedAt);
     
-    // Renewal occurs on the user's monthly join date anniversary (e.g. Oct 3 -> Nov 3)
-    const nextDate = new Date(startDate);
-    nextDate.setMonth(nextDate.getMonth() + 1);
+    let nextDate: Date;
+    if (user.next_billing_date) {
+      nextDate = new Date(user.next_billing_date);
+    } else {
+      nextDate = this.addOneMonthSafe(startDate);
+    }
 
     const now = Date.now();
     const daysUntilRenewal = Math.max(0, Math.ceil((nextDate.getTime() - now) / (1000 * 60 * 60 * 24)));
 
     return {
       billingStartedAt: startDate.toISOString(),
-      nextBillingDate: user.next_billing_date || nextDate.toISOString(),
+      nextBillingDate: nextDate.toISOString(),
       daysUntilRenewal,
     };
   },

@@ -32,11 +32,13 @@ export const eventsService = {
           id: e.id,
           title: e.title,
           date: e.date,
-          time_display: e.date ? new Date(e.date).toLocaleDateString('es-ES', { 
+          time_display: e.date ? new Intl.DateTimeFormat('es-ES', { 
+            timeZone: 'Europe/Madrid',
             weekday: 'short', 
             hour: '2-digit', 
-            minute: '2-digit' 
-          }) : '08:00 AM',
+            minute: '2-digit',
+            hour12: false,
+          }).format(new Date(e.date)) + ' (Madrid)' : '07:00 (Madrid)',
           duration_minutes: e.duration_minutes || 35,
           type: e.type || 'standard',
           host_name: e.host_name || 'Alberto Calvo',
@@ -163,6 +165,7 @@ export const eventsService = {
           payload.theme = updates.theme || updates.weekly_theme;
         }
         if (updates.recording_url !== undefined) payload.recording_url = updates.recording_url;
+        if (updates.status !== undefined) payload.status = updates.status;
 
         const { data, error } = await supabase
           .from('events')

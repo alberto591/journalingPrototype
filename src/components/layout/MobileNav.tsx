@@ -4,7 +4,7 @@ import { Home, Users, PenLine, Calendar, User } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 
 export const MobileNav: React.FC = () => {
-  const { todayJournalSession } = useDataStore();
+  const { todayJournalSession, liveEvent } = useDataStore();
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center justify-center flex-1 py-2 text-[10px] font-medium transition-all ${
@@ -42,8 +42,15 @@ export const MobileNav: React.FC = () => {
         </NavLink>
 
         <NavLink to="/events" className={navItemClass}>
-          <Calendar className="w-5 h-5 mb-0.5" />
-          <span>Eventos</span>
+          <div className="relative">
+            <Calendar className="w-5 h-5 mb-0.5" />
+            {liveEvent && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-600 ring-2 ring-white animate-pulse" />
+            )}
+          </div>
+          <span className={liveEvent ? 'text-rose-600 font-bold' : ''}>
+            {liveEvent ? 'En Directo' : 'Eventos'}
+          </span>
         </NavLink>
 
         <NavLink to="/profile" className={navItemClass}>
