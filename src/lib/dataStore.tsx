@@ -109,29 +109,62 @@ const DataStoreContext = createContext<DataStoreContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'travesia_v2_';
 
+const DEFAULT_EMPTY_USER: Profile = {
+  id: '',
+  name: 'Miembro',
+  avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+  bio: '',
+  role: 'member',
+  membership_status: 'TRIAL',
+  focus_areas: [],
+  created_at: new Date().toISOString(),
+  streak_days: 0,
+  completed_sessions_count: 0,
+  reflection_minutes: 0,
+  current_week: 1,
+  onboarding_completed: false,
+};
+
 export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const isDemoMode = !isSupabaseConfigured;
 
-  // 1. Current User state
+  // 1. Current User state (Only load real user if saved, never default to demo Mateo Silva)
   const [currentUser, setCurrentUser] = useState<Profile>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}user`);
-    return saved ? JSON.parse(saved) : DEMO_CURRENT_USER;
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}user`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.id !== DEMO_CURRENT_USER.id && parsed.name !== 'Mateo Silva') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_EMPTY_USER;
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}user`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Boolean(parsed && parsed.id && parsed.id !== DEMO_CURRENT_USER.id && parsed.name !== 'Mateo Silva');
+      }
+    } catch {}
+    return false;
+  });
 
-  // 2. Data states
-  const [members, setMembers] = useState<Profile[]>(DEMO_MEMBERS);
-  const [channels, setChannels] = useState<Channel[]>(DEMO_CHANNELS);
+  // 2. Data states: Clean real storage without fake mock posts/comments
+  const [members, setMembers] = useState<Profile[]>([]);
+  const [channels, setChannels] = useState<Channel[]>(DEMO_CHANNELS); // Channel categories
   const [posts, setPosts] = useState<Post[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}posts`);
-    return saved ? JSON.parse(saved) : DEMO_POSTS;
+    return saved ? JSON.parse(saved) : [];
   });
   const [comments, setComments] = useState<Comment[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}comments`);
-    return saved ? JSON.parse(saved) : DEMO_COMMENTS;
+    return saved ? JSON.parse(saved) : [];
   });
   const [events, setEvents] = useState<EventItem[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}events`);
@@ -149,49 +182,24 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return saved ? JSON.parse(saved) : INITIAL_DAILY_PROMPTS;
   });
 
-  // Private Journal Sessions
+  // Private Journal Sessions (Zero mock data: only user's own actual sessions)
   const [userJournalSessions, setUserJournalSessions] = useState<JournalSession[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}journals_${currentUser.id}`);
-    if (saved) return JSON.parse(saved);
-    return [
-      {
-        id: 'js-seed-1',
-        user_id: DEMO_CURRENT_USER.id,
-        date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        breathing_completed: true,
-        silence_duration_seconds: 60,
-        free_writing_1m: 'Agradecido por el tiempo de paseo con mi esposa.',
-        deep_writing_10m: 'Necesito proteger mis mañanas y soltar el control excesivo del trabajo.',
-        emotions: [{ category: 'ALEGRÍA', related_to: 'Tarde de paseo familiar.' }],
-        listening_notes: 'Dios me recordaba: "Tu familia es tu primer ministerio."',
-        listening_duration_seconds: 90,
-        action_type: 'action',
-        action_commitment: 'Apagar el ordenador a las 18:30 para cenar con la familia.',
-        total_duration_minutes: 30,
-        status: 'completed',
-      }
-    ];
+    if (!currentUser.id) return [];
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}journals_${currentUser.id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   // Journal Draft
   const [journalDraft, setJournalDraft] = useState<(Partial<JournalSession> & { currentMovementStep?: number }) | null>(() => {
-    return journalService.getDraft(currentUser.id);
+    return currentUser.id ? journalService.getDraft(currentUser.id) : null;
   });
 
   // Notifications
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'notif-1',
-      user_id: currentUser.id,
-      type: 'event',
-      title: 'Próxima sesión en directo',
-      message: 'La sesión diaria "Bajar el ruido" comienza en 4 horas. Prepara tu diario.',
-      link: '/events',
-      read: false,
-      created_at: new Date(Date.now() - 3600000).toISOString(),
-    }
-  ]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // Onboarding
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(() => {
@@ -364,9 +372,10 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const signOut = async () => {
     await authService.signOut();
     setIsAuthenticated(false);
-    if (isDemoMode) {
-      switchUserRole('member');
-    }
+    setCurrentUser(DEFAULT_EMPTY_USER);
+    try {
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}user`);
+    } catch {}
   };
 
   const resetPassword = async (email: string) => {

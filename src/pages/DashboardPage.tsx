@@ -270,9 +270,16 @@ export const DashboardPage: React.FC = () => {
 
       {/* 5. POSTS FEED */}
       <div className="space-y-4">
-        {filteredPosts.map(post => (
-          <PostCard key={post.id} post={post} />
-        ))}
+        {filteredPosts.length > 0 ? (
+          filteredPosts.map(post => (
+            <PostCard key={post.id} post={post} />
+          ))
+        ) : (
+          <div className="travesia-card p-8 text-center text-stone-500 bg-sand-50/50 border-dashed border-sand-300">
+            <p className="font-serif text-stone-800 text-sm font-semibold mb-1">Aún no hay publicaciones en el muro</p>
+            <p className="text-xs text-stone-500">Sé el primero en compartir una reflexión o discernimiento de tu práctica de hoy arriba.</p>
+          </div>
+        )}
       </div>
     </div>
   );

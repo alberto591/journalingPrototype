@@ -1,30 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useDataStore } from '../lib/dataStore';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { ArrowRight, Shield, UserCheck, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/dashboard';
 
-  const { switchUserRole, signIn, signUp } = useDataStore();
+  const { signIn, signUp } = useDataStore();
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-
-  const handleDemoLogin = (role: 'member' | 'admin' | 'new') => {
-    switchUserRole(role);
-    if (role === 'new') {
-      navigate('/onboarding');
-    } else {
-      navigate(redirectTo);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,35 +25,34 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    if (isSupabaseConfigured) {
-      setIsSubmitting(true);
-      try {
-        if (isRegistering) {
-          const res = await signUp(email, password, name || email.split('@')[0]);
-          if (!res.success) {
-            setAuthError(res.error || 'Error al registrar la cuenta.');
-            setIsSubmitting(false);
-            return;
-          }
-          navigate('/onboarding');
-        } else {
-          const res = await signIn(email, password);
-          if (!res.success) {
-            setAuthError(res.error || 'Error al iniciar sesión.');
-            setIsSubmitting(false);
-            return;
-          }
-          navigate(redirectTo);
+    if (isRegistering && !name.trim()) {
+      setAuthError('Por favor introduce tu nombre completo.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (isRegistering) {
+        const res = await signUp(email, password, name.trim());
+        if (!res.success) {
+          setAuthError(res.error || 'Error al registrar la cuenta.');
+          setIsSubmitting(false);
+          return;
         }
-      } catch (err: any) {
-        setAuthError(err?.message || 'Error inesperado durante la autenticación.');
-      } finally {
-        setIsSubmitting(false);
+        navigate('/onboarding');
+      } else {
+        const res = await signIn(email, password);
+        if (!res.success) {
+          setAuthError(res.error || 'Error al iniciar sesión.');
+          setIsSubmitting(false);
+          return;
+        }
+        navigate(redirectTo);
       }
-    } else {
-      // Local development fallback
-      switchUserRole('member');
-      navigate(redirectTo);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Error inesperado durante la autenticación.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -72,14 +61,16 @@ export const LoginPage: React.FC = () => {
       <div className="max-w-md w-full space-y-8 animate-fade-in">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-stone-900 mx-auto flex items-center justify-center text-sand-50 shadow-md">
-            <svg className="w-7 h-7" viewBox="0 0 32 32" fill="none">
-              <circle cx="16" cy="16" r="9" stroke="#E7C8B6" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.6"/>
-              <path d="M16 7V25" stroke="#FAF4EF" strokeWidth="2" strokeLinecap="round"/>
-              <path d="M10 16H22" stroke="#FAF4EF" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="16" cy="16" r="3" fill="#B66E43" />
-            </svg>
-          </div>
+          <Link to="/" className="inline-block">
+            <div className="w-14 h-14 rounded-2xl bg-stone-900 mx-auto flex items-center justify-center text-sand-50 shadow-md">
+              <svg className="w-7 h-7" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="9" stroke="#E7C8B6" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.6"/>
+                <path d="M16 7V25" stroke="#FAF4EF" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M10 16H22" stroke="#FAF4EF" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="16" cy="16" r="3" fill="#B66E43" />
+              </svg>
+            </div>
+          </Link>
           <h1 className="font-serif font-bold text-3xl text-stone-950 tracking-wider">
             TRAVESÍA
           </h1>
@@ -88,50 +79,7 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Demo Fast Login Cards (Visible only when in development / without Supabase credentials) */}
-        {!isSupabaseConfigured && (
-          <div className="bg-sand-100/70 p-4 rounded-2xl border border-sand-200/90 space-y-2">
-            <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider block text-center">
-              Modo Demostración Local
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('member')}
-                className="p-2.5 rounded-xl bg-white hover:bg-sand-200/60 border border-sand-200 text-left transition-all text-xs"
-              >
-                <div className="flex items-center gap-1.5 font-bold text-stone-900">
-                  <UserCheck className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Mateo Silva</span>
-                </div>
-                <p className="text-[10px] text-stone-500 mt-0.5">Miembro (Racha 7d)</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin')}
-                className="p-2.5 rounded-xl bg-white hover:bg-sand-200/60 border border-sand-200 text-left transition-all text-xs"
-              >
-                <div className="flex items-center gap-1.5 font-bold text-amber-900">
-                  <Shield className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Alberto Calvo</span>
-                </div>
-                <p className="text-[10px] text-stone-500 mt-0.5">Fundador (Admin)</p>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('new')}
-              className="w-full py-2 px-3 rounded-xl bg-bronze-50 hover:bg-bronze-100 border border-bronze-200 text-bronze-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Probar nuevo miembro (Onboarding completo)</span>
-            </button>
-          </div>
-        )}
-
-        {/* Traditional Form Card */}
+        {/* Real Authentication Form Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-card border border-sand-200 space-y-4">
           <div className="flex border-b border-sand-100 pb-3">
             <button
@@ -165,7 +113,7 @@ export const LoginPage: React.FC = () => {
             {isRegistering && (
               <div>
                 <label className="block text-xs font-semibold text-stone-600 mb-1">
-                  Tu nombre:
+                  Tu nombre y apellido:
                 </label>
                 <input
                   type="text"
@@ -224,7 +172,7 @@ export const LoginPage: React.FC = () => {
                 onClick={() => { setIsRegistering(!isRegistering); setAuthError(null); }}
                 className="text-bronze-700 font-semibold underline hover:text-bronze-900"
               >
-                {isRegistering ? 'Inicia sesión' : 'Inicia tu orientación'}
+                {isRegistering ? 'Inicia sesión' : 'Regístrate aquí'}
               </button>
             </span>
           </div>

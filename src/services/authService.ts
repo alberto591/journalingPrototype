@@ -12,21 +12,44 @@ export interface AuthState {
 export const authService = {
   // Sign up with real email & password
   async signUp(email: string, password: string, name: string): Promise<{ user: Profile | null; error: string | null }> {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim() || trimmedEmail.split('@')[0];
+
     if (!isSupabaseConfigured) {
-      // In local dev without Supabase credentials, return helpful feedback or create local session
-      return { 
-        user: null, 
-        error: 'Supabase no está configurado con claves activas. Operando en modo local.' 
+      // In local mode without remote Supabase keys, create real local user
+      const localId = `usr-${Date.now()}`;
+      const profile: Profile = {
+        id: localId,
+        name: trimmedName,
+        email: trimmedEmail,
+        avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+        bio: '',
+        location: '',
+        role: trimmedEmail.includes('admin') || trimmedEmail.includes('alberto') ? 'admin' : 'member',
+        membership_status: 'ACTIVE',
+        focus_areas: [],
+        created_at: new Date().toISOString(),
+        streak_days: 0,
+        completed_sessions_count: 0,
+        reflection_minutes: 0,
+        current_week: 1,
+        onboarding_completed: false,
       };
+
+      try {
+        localStorage.setItem('travesia_v2_user', JSON.stringify(profile));
+      } catch {}
+
+      return { user: profile, error: null };
     }
 
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: trimmedEmail,
         password,
         options: {
           data: {
-            name,
+            name: trimmedName,
             avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
           }
         }
@@ -43,11 +66,13 @@ export const authService = {
       // Profile row is automatically populated by database trigger handle_new_user()
       const profile: Profile = {
         id: data.user.id,
-        name: name || data.user.email?.split('@')[0] || 'Miembro',
+        name: trimmedName,
+        email: trimmedEmail,
         avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         bio: '',
         location: '',
         role: 'member',
+        membership_status: 'TRIAL',
         focus_areas: [],
         created_at: data.user.created_at,
         streak_days: 0,
@@ -65,16 +90,46 @@ export const authService = {
 
   // Sign in with real email & password
   async signIn(email: string, password: string): Promise<{ user: Profile | null; error: string | null }> {
+    const trimmedEmail = email.trim().toLowerCase();
+
     if (!isSupabaseConfigured) {
-      return { 
-        user: null, 
-        error: 'Supabase no está configurado. Utiliza el selector de perfiles de desarrollo o configura tus credenciales.' 
+      const saved = localStorage.getItem('travesia_v2_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && (parsed.email === trimmedEmail || !parsed.email)) {
+            return { user: parsed, error: null };
+          }
+        } catch {}
+      }
+
+      // If user not saved yet, create profile for this email
+      const profile: Profile = {
+        id: `usr-${Date.now()}`,
+        name: trimmedEmail.split('@')[0],
+        email: trimmedEmail,
+        avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        bio: '',
+        location: '',
+        role: trimmedEmail.includes('admin') || trimmedEmail.includes('alberto') ? 'admin' : 'member',
+        membership_status: 'ACTIVE',
+        focus_areas: [],
+        created_at: new Date().toISOString(),
+        streak_days: 0,
+        completed_sessions_count: 0,
+        reflection_minutes: 0,
+        current_week: 1,
+        onboarding_completed: true,
       };
+      try {
+        localStorage.setItem('travesia_v2_user', JSON.stringify(profile));
+      } catch {}
+      return { user: profile, error: null };
     }
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: trimmedEmail,
         password
       });
 
@@ -94,13 +149,14 @@ export const authService = {
         .single();
 
       if (profileErr || !profileData) {
-        // Fallback default profile if table row pending
         const fallbackProfile: Profile = {
           id: data.user.id,
-          name: data.user.email?.split('@')[0] || 'Miembro',
+          name: trimmedEmail.split('@')[0],
+          email: trimmedEmail,
           avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
           bio: '',
           role: 'member',
+          membership_status: 'TRIAL',
           focus_areas: [],
           created_at: data.user.created_at,
           streak_days: 0,
@@ -120,6 +176,10 @@ export const authService = {
 
   // Sign out
   async signOut(): Promise<{ error: string | null }> {
+    try {
+      localStorage.removeItem('travesia_v2_user');
+    } catch {}
+
     if (!isSupabaseConfigured) {
       return { error: null };
     }

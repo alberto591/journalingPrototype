@@ -5,10 +5,7 @@ import {
   Bell, 
   ChevronRight, 
   CheckCheck, 
-  UserCheck, 
-  Shield, 
   LogOut,
-  SlidersHorizontal,
   Menu
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
@@ -23,7 +20,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
   const navigate = useNavigate();
   const { 
     currentUser, 
-    switchUserRole, 
+    signOut, 
     notifications, 
     markNotificationAsRead, 
     markAllNotificationsAsRead 
@@ -32,7 +29,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -152,7 +148,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
             </button>
           </div>
 
-          {/* Right: Role Switcher + Search icon (mobile) + Notifications + Avatar */}
+          {/* Right: Search icon (mobile) + Notifications + Avatar */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Mobile Search Button */}
             <button
@@ -161,64 +157,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
             >
               <Search className="w-5 h-5" />
             </button>
-
-            {/* Dev/Demo Role Switcher Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-sand-200 bg-white hover:bg-sand-100 text-stone-700 shadow-subtle transition-all"
-                title="Cambiar rol para evaluar la plataforma"
-              >
-                {currentUser.role === 'admin' ? (
-                  <Shield className="w-3.5 h-3.5 text-amber-600" />
-                ) : (
-                  <UserCheck className="w-3.5 h-3.5 text-stone-500" />
-                )}
-                <span>{currentUser.role === 'admin' ? 'Fundador (Admin)' : 'Miembro'}</span>
-                <SlidersHorizontal className="w-3 h-3 text-stone-400 ml-0.5" />
-              </button>
-
-              {isRoleMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-sand-200 py-1.5 z-40 text-xs animate-scale-up">
-                  <div className="px-3 py-1.5 text-stone-400 uppercase font-semibold text-[10px] border-b border-sand-100">
-                    Cambiar Perfil de Demostración
-                  </div>
-                  <button
-                    onClick={() => { switchUserRole('member'); setIsRoleMenuOpen(false); }}
-                    className="w-full text-left px-3 py-2 hover:bg-sand-100 flex items-center justify-between text-stone-700"
-                  >
-                    <div>
-                      <p className="font-medium">Mateo Silva</p>
-                      <p className="text-[11px] text-stone-500">Miembro habitual (Racha 7 días)</p>
-                    </div>
-                    {currentUser.role === 'member' && currentUser.onboarding_completed && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { switchUserRole('admin'); setIsRoleMenuOpen(false); }}
-                    className="w-full text-left px-3 py-2 hover:bg-sand-100 flex items-center justify-between text-stone-700"
-                  >
-                    <div>
-                      <p className="font-medium">Alberto Calvo</p>
-                      <p className="text-[11px] text-stone-500">Fundador & Moderador Principal</p>
-                    </div>
-                    {currentUser.role === 'admin' && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { switchUserRole('new'); setIsRoleMenuOpen(false); navigate('/onboarding'); }}
-                    className="w-full text-left px-3 py-2 hover:bg-sand-100 flex items-center justify-between text-stone-700 border-t border-sand-100"
-                  >
-                    <div>
-                      <p className="font-medium text-bronze-700">Nuevo Miembro</p>
-                      <p className="text-[11px] text-stone-500">Probar flujo de Onboarding guiado</p>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* Notifications Menu */}
             <div className="relative">
@@ -285,18 +223,24 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
                 className="flex items-center gap-2 p-1 rounded-xl hover:bg-sand-200/60 transition-colors"
               >
-                <img
-                  src={currentUser.avatar_url}
-                  alt={currentUser.name}
-                  className="w-8 h-8 rounded-full object-cover border border-sand-300"
-                />
+                {currentUser.avatar_url ? (
+                  <img
+                    src={currentUser.avatar_url}
+                    alt={currentUser.name}
+                    className="w-8 h-8 rounded-full object-cover border border-sand-300"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-sand-200 border border-sand-300 flex items-center justify-center text-xs font-semibold text-stone-700">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
               </button>
 
               {isProfileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-sand-200 py-2 z-40 text-xs animate-scale-up">
                   <div className="px-4 py-2 border-b border-sand-100">
-                    <p className="font-semibold text-stone-900 truncate">{currentUser.name}</p>
-                    <p className="text-stone-500 text-[11px] truncate">{currentUser.bio || 'Miembro de Travesía'}</p>
+                    <p className="font-semibold text-stone-900 truncate">{currentUser.name || 'Usuario'}</p>
+                    <p className="text-stone-500 text-[11px] truncate">{currentUser.email || currentUser.bio || 'Miembro de Travesía'}</p>
                   </div>
                   <div className="py-1">
                     <Link
@@ -325,9 +269,9 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenMobileSidebar }) => {
                   </div>
                   <div className="border-t border-sand-100 pt-1">
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         setIsProfileMenuOpen(false);
-                        switchUserRole('new');
+                        await signOut();
                         navigate('/login');
                       }}
                       className="w-full text-left px-4 py-2 hover:bg-rose-50 text-rose-700 flex items-center gap-2"
