@@ -149,14 +149,25 @@ export const authService = {
         .single();
 
       if (profileErr || !profileData) {
+        // Even in fallback, check if user is admin
+        let isAdmin = false;
+        try {
+          const { data: adminRecord } = await supabase
+            .from('admin_roles')
+            .select('id')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+          if (adminRecord) isAdmin = true;
+        } catch {}
+
         const fallbackProfile: Profile = {
           id: data.user.id,
           name: trimmedEmail.split('@')[0],
           email: trimmedEmail,
           avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
           bio: '',
-          role: 'member',
-          membership_status: 'TRIAL',
+          role: isAdmin ? 'admin' : 'member',
+          membership_status: isAdmin ? 'ACTIVE' : 'TRIAL',
           focus_areas: [],
           created_at: data.user.created_at,
           streak_days: 0,
@@ -168,7 +179,20 @@ export const authService = {
         return { user: fallbackProfile, error: null };
       }
 
-      return { user: profileData as Profile, error: null };
+      // Check admin_roles table as well
+      const resolvedProfile = profileData as Profile;
+      try {
+        const { data: adminRecord } = await supabase
+          .from('admin_roles')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+        if (adminRecord) {
+          resolvedProfile.role = 'admin';
+        }
+      } catch {}
+
+      return { user: resolvedProfile, error: null };
     } catch (err: any) {
       return { user: null, error: err?.message || 'Error al iniciar sesión.' };
     }

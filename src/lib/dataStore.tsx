@@ -273,8 +273,32 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (profile) {
-          setCurrentUser(profile as Profile);
+        let userProfile = profile ? (profile as Profile) : null;
+        try {
+          const { data: adminRecord } = await supabase
+            .from('admin_roles')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+          if (adminRecord) {
+            userProfile = userProfile ? { ...userProfile, role: 'admin' } : null;
+          }
+        } catch {}
+
+        if (userProfile) {
+          setCurrentUser(userProfile);
+        } else {
+          // If profile could not be loaded via RLS, still update role if in admin_roles
+          try {
+            const { data: adminRecord } = await supabase
+              .from('admin_roles')
+              .select('id')
+              .eq('user_id', session.user.id)
+              .maybeSingle();
+            if (adminRecord) {
+              setCurrentUser(prev => ({ ...prev, role: 'admin', membership_status: 'ACTIVE' }));
+            }
+          } catch {}
         }
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
@@ -302,7 +326,32 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               .eq('id', userData.user.id)
               .maybeSingle();
 
-            if (profile) setCurrentUser(profile as Profile);
+            let userProfile = profile ? (profile as Profile) : null;
+            try {
+              const { data: adminRecord } = await supabase
+                .from('admin_roles')
+                .select('id')
+                .eq('user_id', userData.user.id)
+                .maybeSingle();
+              if (adminRecord) {
+                userProfile = userProfile ? { ...userProfile, role: 'admin' } : null;
+              }
+            } catch {}
+
+            if (userProfile) {
+              setCurrentUser(userProfile);
+            } else {
+              try {
+                const { data: adminRecord } = await supabase
+                  .from('admin_roles')
+                  .select('id')
+                  .eq('user_id', userData.user.id)
+                  .maybeSingle();
+                if (adminRecord) {
+                  setCurrentUser(prev => ({ ...prev, role: 'admin', membership_status: 'ACTIVE' }));
+                }
+              } catch {}
+            }
           } else {
             setIsAuthenticated(false);
           }
