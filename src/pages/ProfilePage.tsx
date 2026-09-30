@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useDataStore } from '../lib/dataStore';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   User, 
   MapPin, 
@@ -9,23 +10,80 @@ import {
   Save, 
   Camera,
   Flame,
-  Clock
+  Clock,
+  Upload
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
   const { currentUser, updateCurrentUserProfile } = useDataStore();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [name, setName] = useState(currentUser.name);
   const [bio, setBio] = useState(currentUser.bio);
   const [location, setLocation] = useState(currentUser.location || '');
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatar_url);
   const [focusAreasText, setFocusAreasText] = useState(currentUser.focus_areas.join(', '));
+  const [isUploading, setIsUploading] = useState(false);
 
   // Preferences
   const [dailyReminder, setDailyReminder] = useState(true);
   const [sessionReminder, setSessionReminder] = useState(true);
   const [communityNotifs, setCommunityNotifs] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La imagen no debe superar los 5MB.');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // 1. If Supabase is configured, attempt upload to profile-images storage bucket
+      if (isSupabaseConfigured && currentUser.id) {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const filePath = `${currentUser.id}/avatar_${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('profile-images')
+          .upload(filePath, file, { upsert: true });
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('profile-images')
+            .getPublicUrl(filePath);
+
+          setAvatarUrl(publicUrl);
+          await updateCurrentUserProfile({ avatar_url: publicUrl });
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 2500);
+          setIsUploading(false);
+          return;
+        }
+      }
+
+      // 2. High-performance fallback: FileReader base64 Data URL (works offline & local)
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          setAvatarUrl(dataUrl);
+          await updateCurrentUserProfile({ avatar_url: dataUrl });
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 2500);
+        }
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error al actualizar avatar:', err);
+      setIsUploading(false);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,15 +103,48 @@ export const ProfilePage: React.FC = () => {
     <div className="max-w-3xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
       {/* Header Profile Card */}
       <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <div className="relative group">
-          <img
-            src={avatarUrl}
-            alt={name}
-            className="w-24 h-24 rounded-2xl object-cover border-2 border-amber-400/80 shadow-md"
+        <div className="flex flex-col items-center sm:items-start gap-2 flex-shrink-0">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarFileChange}
+            accept="image/png, image/jpeg, image/webp, image/gif"
+            className="hidden"
           />
-          <div className="absolute inset-0 bg-stone-900/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
-            <Camera className="w-6 h-6 text-white" />
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="relative group cursor-pointer"
+            title="Haz clic para seleccionar una foto de perfil"
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={name}
+                className="w-24 h-24 rounded-2xl object-cover border-2 border-amber-400/80 shadow-md transition-transform group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-2xl bg-stone-800 border-2 border-amber-400/80 shadow-md flex items-center justify-center text-3xl font-bold text-amber-400">
+                {name ? name.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-stone-950/60 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+              <Camera className="w-6 h-6 text-amber-400 mb-1" />
+              <span className="text-[10px] text-white font-medium">Cambiar</span>
+            </div>
+            {isUploading && (
+              <div className="absolute inset-0 bg-stone-950/80 rounded-2xl flex items-center justify-center">
+                <span className="text-xs text-amber-400 font-semibold animate-pulse">Subiendo...</span>
+              </div>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-[11px] font-medium text-amber-400 hover:text-amber-300 underline underline-offset-2 flex items-center gap-1 mt-0.5 cursor-pointer"
+          >
+            <Camera className="w-3 h-3" />
+            <span>Cambiar foto</span>
+          </button>
         </div>
 
         <div className="flex-1 text-center sm:text-left space-y-1">
