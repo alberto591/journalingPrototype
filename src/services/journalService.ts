@@ -1,55 +1,26 @@
+/**
+ * JOURNAL SERVICE — TRAVESÍA
+ * 
+ * Manages the 5 Movements of the Travesía Guided Practice:
+ * 1. Desacelerar (Breathing, Silence & Gratitude)
+ * 2. Descargar (Unfiltered brain dump)
+ * 3. Nombrar la Realidad (Emotions, Vision & Identity)
+ * 4. Escuchar (Silent stillness / prayer)
+ * 5. Actuar (Concrete single action / release)
+ * 
+ * STRICT PRIVACY GUARANTEE:
+ * Enforced via Row Level Security (RLS) in PostgreSQL.
+ * User sessions and drafts are isolated to auth.uid().
+ */
+
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { JournalSession, EmotionSelection } from '../types';
+import { JournalSession } from '../types';
 
 const DRAFT_KEY_PREFIX = 'travesia_journal_draft_';
 
-/**
- * Pure function to calculate dynamic contiguous streak of days from session dates.
- * Dates format: YYYY-MM-DD
- */
-export function calculateDynamicStreak(datesList: string[]): number {
-  if (!datesList || datesList.length === 0) return 0;
-
-  // Deduplicate and sort descending
-  const uniqueDates = Array.from(new Set(datesList)).sort((a, b) => b.localeCompare(a));
-  if (uniqueDates.length === 0) return 0;
-
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-  const latestDate = uniqueDates[0];
-
-  // If the user hasn't journaled today or yesterday, streak is broken (0)
-  if (latestDate !== todayStr && latestDate !== yesterdayStr) {
-    return 0;
-  }
-
-  let streak = 0;
-  let expectedDate = new Date(latestDate);
-
-  for (let i = 0; i < uniqueDates.length; i++) {
-    const currentDate = uniqueDates[i];
-    const expectedStr = expectedDate.toISOString().split('T')[0];
-
-    if (currentDate === expectedStr) {
-      streak += 1;
-      // Step one day back
-      expectedDate.setDate(expectedDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-
 export const journalService = {
-  // Save or update an in-progress draft (so refreshing or closing the browser preserves progress)
-  saveDraft(userId: string, draft: Partial<JournalSession> & { currentMovementStep?: number }): void {
+  // Save or update an in-progress draft (localStorage + Supabase journal_drafts table)
+  async saveDraft(userId: string, draft: Partial<JournalSession> & { currentMovementStep?: number }): Promise<void> {
     if (!userId) return;
     try {
       localStorage.setItem(`${DRAFT_KEY_PREFIX}${userId}`, JSON.stringify({
@@ -57,7 +28,22 @@ export const journalService = {
         updated_at: new Date().toISOString()
       }));
     } catch {
-      // ignore storage quota issues
+      // ignore local storage quota issues
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('journal_drafts')
+          .upsert({
+            user_id: userId,
+            current_movement_step: draft.currentMovementStep || 1,
+            draft_payload: draft,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+      } catch {
+        // Non-blocking draft sync
+      }
     }
   },
 
@@ -74,11 +60,22 @@ export const journalService = {
   },
 
   // Clear draft upon successful completion of session
-  clearDraft(userId: string): void {
+  async clearDraft(userId: string): Promise<void> {
     if (!userId) return;
     try {
       localStorage.removeItem(`${DRAFT_KEY_PREFIX}${userId}`);
     } catch {}
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('journal_drafts')
+          .delete()
+          .eq('user_id', userId);
+      } catch {
+        // ignore draft deletion errors
+      }
+    }
   },
 
   // Fetch private sessions strictly for the authenticated user
@@ -125,7 +122,7 @@ export const journalService = {
         id: `js-${Date.now()}`,
         created_at: new Date().toISOString(),
       };
-      journalService.clearDraft(userId);
+      this.clearDraft(userId);
       return { session: localSession, error: null };
     }
 
@@ -138,11 +135,14 @@ export const journalService = {
           date: newRecord.date,
           breathing_completed: newRecord.breathing_completed,
           silence_duration_seconds: newRecord.silence_duration_seconds,
+          gratitude_items: newRecord.gratitude_items || [],
           free_writing_1m: newRecord.free_writing_1m,
           deep_writing_10m: newRecord.deep_writing_10m,
           focus_prompt_id: newRecord.focus_prompt_id,
           focus_prompt_text: newRecord.focus_prompt_text,
           focus_prompt_answer: newRecord.focus_prompt_answer,
+          vision_sentence: newRecord.vision_sentence,
+          identity_words: newRecord.identity_words || [],
           listening_notes: newRecord.listening_notes,
           listening_duration_seconds: newRecord.listening_duration_seconds,
           action_type: newRecord.action_type,
@@ -154,11 +154,11 @@ export const journalService = {
         .single();
 
       if (error) {
-        return { session: null, error: error.message };
+        return { session: null, error: `Ha ocurrido un problema al guardar tu sesión: ${error.message}. Inténtalo de nuevo.` };
       }
 
       // Also record commitment in action_commitments table
-      if (newRecord.action_commitment) {
+      if (newRecord.action_commitment && data?.id) {
         await supabase
           .from('action_commitments')
           .insert({
@@ -172,11 +172,56 @@ export const journalService = {
       }
 
       // Clear draft once saved
-      journalService.clearDraft(userId);
+      this.clearDraft(userId);
 
       return { session: data as JournalSession, error: null };
     } catch (err: any) {
-      return { session: null, error: err?.message || 'Error al persistir la sesión en el servidor.' };
+      return { session: null, error: err?.message || 'Ha ocurrido un problema al guardar tu sesión. Inténtalo de nuevo.' };
     }
   }
 };
+
+/**
+ * Pure utility function to calculate consecutive practice streak
+ */
+export function calculateDynamicStreak(dates: string[]): number {
+  if (!dates || dates.length === 0) return 0;
+
+  const uniqueSortedDates = Array.from(new Set(dates))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const mostRecentDate = new Date(uniqueSortedDates[0]);
+  mostRecentDate.setHours(0, 0, 0, 0);
+
+  // If most recent is neither today nor yesterday, streak is broken
+  if (mostRecentDate.getTime() !== today.getTime() && mostRecentDate.getTime() !== yesterday.getTime()) {
+    return 0;
+  }
+
+  let streak = 1;
+  let currentDate = mostRecentDate;
+
+  for (let i = 1; i < uniqueSortedDates.length; i++) {
+    const prevDate = new Date(uniqueSortedDates[i]);
+    prevDate.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      streak++;
+      currentDate = prevDate;
+    } else if (diffDays === 0) {
+      continue;
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}

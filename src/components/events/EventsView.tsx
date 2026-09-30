@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
+import { eventsService } from '../../services/eventsService';
 import { EventItem } from '../../types';
 import { 
   Calendar, 
@@ -7,37 +9,71 @@ import {
   Video, 
   CheckCircle, 
   Users, 
-  ArrowRight, 
   ExternalLink,
-  Plus,
   PlayCircle,
-  X
+  AlertCircle
 } from 'lucide-react';
 
 export const EventsView: React.FC = () => {
-  const { events, toggleRegisterEvent, currentUser, addEvent } = useDataStore();
+  const navigate = useNavigate();
+  const { events, toggleRegisterEvent, currentUser } = useDataStore();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
-  const [liveRoomEvent, setLiveRoomEvent] = useState<EventItem | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const upcomingEvents = events.filter(e => e.status === 'upcoming' || e.status === 'live');
   const pastEvents = events.filter(e => e.status === 'finished');
   const displayedEvents = activeTab === 'upcoming' ? upcomingEvents : pastEvents;
 
   const handleAddToCalendar = (event: EventItem) => {
-    // Generate simple Google Calendar URL
     const title = encodeURIComponent(event.title);
     const details = encodeURIComponent(event.description);
     const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}`;
-    window.open(gcalUrl, '_blank');
+    window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleEnterZoom = async (event: EventItem) => {
+    setInfoMessage(null);
+
+    // Track join click event in Supabase (join_click, NOT attendance)
+    if (currentUser?.id) {
+      await eventsService.recordZoomJoinClick(event.id, currentUser.id);
+    }
+
+    if (event.meeting_url) {
+      window.open(event.meeting_url, '_blank', 'noopener,noreferrer');
+    } else {
+      setInfoMessage(`El enlace de Zoom para "${event.title}" estará disponible 10 minutos antes del inicio de la sesión.`);
+      setTimeout(() => setInfoMessage(null), 5000);
+    }
+  };
+
+  const handleOpenRecording = (event: EventItem) => {
+    navigate('/archive');
   };
 
   return (
     <div className="max-w-4xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
+      {/* Notification Toast */}
+      {infoMessage && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between shadow-sm animate-fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>{infoMessage}</span>
+          </div>
+          <button 
+            onClick={() => setInfoMessage(null)}
+            className="text-amber-700 font-bold hover:text-amber-950 text-xs"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {/* Hero Header */}
       <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-block mb-3">
-            Sesiones Guiadas en Directo
+            Sesiones Guiadas en Directo (Zoom)
           </span>
           <h1 className="font-serif text-2xl sm:text-3xl font-bold">
             Eventos y Práctica en Vivo
@@ -47,15 +83,17 @@ export const EventsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex-shrink-0">
-          <button
-            onClick={() => setLiveRoomEvent(upcomingEvents[0] || events[0])}
-            className="travesia-btn-accent text-xs py-2.5 px-5 font-semibold flex items-center gap-2 shadow-lg"
-          >
-            <Video className="w-4 h-4" />
-            <span>Sala de Sesión en Directo</span>
-          </button>
-        </div>
+        {upcomingEvents.length > 0 && (
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => handleEnterZoom(upcomingEvents[0])}
+              className="travesia-btn-accent text-xs py-2.5 px-5 font-semibold flex items-center gap-2 shadow-lg"
+            >
+              <Video className="w-4 h-4" />
+              <span>Entrar en Zoom</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -99,41 +137,24 @@ export const EventsView: React.FC = () => {
                   }`}>
                     {event.type === 'coaching' ? 'Mentoría Grupal (60m)' : 'Journaling Diario (35m)'}
                   </span>
-
-                  {event.status === 'live' && (
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 animate-pulse flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-                      EN DIRECTO
-                    </span>
-                  )}
-
-                  <span className="text-xs text-bronze-700 font-medium">
+                  <span className="text-xs text-stone-500 flex items-center gap-1 font-mono">
+                    <Clock className="w-3.5 h-3.5" />
                     {event.time_display}
                   </span>
                 </div>
 
-                <h3 className="font-serif font-bold text-lg sm:text-xl text-stone-900">
+                <h3 className="font-serif font-bold text-lg text-stone-900">
                   {event.title}
                 </h3>
-
-                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                <p className="text-xs text-stone-600 leading-relaxed">
                   {event.description}
                 </p>
 
-                {/* Host & Attendees */}
-                <div className="flex items-center gap-3 pt-1 text-xs text-stone-500">
-                  <div className="flex items-center gap-1.5">
-                    <img
-                      src={event.host_avatar}
-                      alt={event.host_name}
-                      className="w-5 h-5 rounded-full object-cover border border-sand-300"
-                    />
-                    <span className="font-medium text-stone-700">{event.host_name}</span>
-                  </div>
-                  <span>·</span>
+                <div className="flex items-center gap-4 text-xs text-stone-500 pt-1">
+                  <span>Facilitador: <strong className="text-stone-800">{event.host_name}</strong></span>
                   <span className="flex items-center gap-1">
                     <Users className="w-3.5 h-3.5 text-stone-400" />
-                    {event.attendees_count} registrados
+                    {event.attendees_count} inscritos
                   </span>
                 </div>
               </div>
@@ -146,7 +167,7 @@ export const EventsView: React.FC = () => {
                       onClick={() => toggleRegisterEvent(event.id)}
                       className={`text-xs py-2 px-4 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-all ${
                         event.user_is_registered
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-rose-50 hover:text-rose-800 hover:border-rose-200'
                           : 'bg-stone-900 hover:bg-stone-800 text-white shadow-sm'
                       }`}
                     >
@@ -171,20 +192,21 @@ export const EventsView: React.FC = () => {
                       </button>
 
                       <button
-                        onClick={() => setLiveRoomEvent(event)}
+                        onClick={() => handleEnterZoom(event)}
                         className="text-xs text-bronze-700 hover:text-bronze-900 font-semibold flex items-center gap-1 py-1 px-2"
                       >
-                        <span>Entrar a la sala →</span>
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Entrar en Zoom</span>
                       </button>
                     </div>
                   </>
                 ) : (
                   <button
-                    onClick={() => setLiveRoomEvent(event)}
+                    onClick={() => handleOpenRecording(event)}
                     className="travesia-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
                   >
                     <PlayCircle className="w-4 h-4 text-amber-400" />
-                    <span>Ver grabación</span>
+                    <span>Ver grabación en Archivo</span>
                   </button>
                 )}
               </div>
@@ -192,60 +214,6 @@ export const EventsView: React.FC = () => {
           </div>
         ))}
       </div>
-
-      {/* Simulated Live Session Modal */}
-      {liveRoomEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-stone-950 text-sand-50 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-stone-800 space-y-6">
-            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                <span className="text-xs uppercase font-bold text-rose-400 tracking-wider">
-                  Sala de Práctica en Vivo
-                </span>
-              </div>
-              <button
-                onClick={() => setLiveRoomEvent(null)}
-                className="text-stone-400 hover:text-white p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <h3 className="font-serif text-2xl font-bold text-white">
-                {liveRoomEvent.title}
-              </h3>
-              <p className="text-xs text-stone-400 mt-1">
-                Guía: {liveRoomEvent.host_name} · Duración: {liveRoomEvent.duration_minutes} min
-              </p>
-            </div>
-
-            {/* Video Placeholder Area */}
-            <div className="relative aspect-video rounded-2xl bg-stone-900 border border-stone-800 flex flex-col items-center justify-center text-center p-6 overflow-hidden group">
-              <div className="w-16 h-16 rounded-full bg-bronze-600/90 text-white flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform mb-3">
-                <PlayCircle className="w-8 h-8" />
-              </div>
-              <p className="font-serif text-lg font-semibold text-stone-200">
-                La transmisión en directo o grabación comenzará en breve
-              </p>
-              <p className="text-xs text-stone-400 max-w-sm mt-1">
-                Prepara tu libreta, tu respiración y silencia toda notificación en tu entorno.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-stone-400 pt-2">
-              <span>{liveRoomEvent.attendees_count} hermanos conectados</span>
-              <button
-                onClick={() => setLiveRoomEvent(null)}
-                className="travesia-btn-secondary text-xs text-stone-200 bg-stone-800 border-stone-700 hover:bg-stone-700"
-              >
-                Salir de la sala
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

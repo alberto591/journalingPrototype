@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDataStore } from '../../lib/dataStore';
+import { recordingsService } from '../../services/recordingsService';
 import { SessionRecording } from '../../types';
-import { Film, PlayCircle, Clock, Calendar, Search, X } from 'lucide-react';
+import { Film, PlayCircle, Clock, Calendar, Search, X, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const ArchiveView: React.FC = () => {
-  const { recordings } = useDataStore();
+  const { recordings, currentUser } = useDataStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRecordingModal, setActiveRecordingModal] = useState<SessionRecording | null>(null);
+  const [playableUrl, setPlayableUrl] = useState<string | null>(null);
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const categories = [
     'Todas',
@@ -28,6 +34,49 @@ export const ArchiveView: React.FC = () => {
     return matchesCategory && matchesQuery;
   });
 
+  const handleOpenModal = async (rec: SessionRecording) => {
+    setActiveRecordingModal(rec);
+    setPlayableUrl(null);
+    setAccessError(null);
+    setIsLoadingUrl(true);
+
+    // 1. Verify access
+    const access = recordingsService.checkAccess(currentUser, rec);
+    if (!access.allowed) {
+      setAccessError(access.message);
+      setIsLoadingUrl(false);
+      return;
+    }
+
+    // 2. Request signed URL and track replay_opened
+    try {
+      recordingsService.trackReplayEvent(rec.id, currentUser.id, 'replay_opened');
+      const { playableUrl: url, error } = await recordingsService.getSecurePlayableUrl(currentUser, rec);
+      if (error || !url) {
+        setAccessError(error || 'No se pudo generar el enlace seguro de reproducción.');
+      } else {
+        setPlayableUrl(url);
+      }
+    } catch (err: any) {
+      setAccessError('Error al preparar la reproducción del video.');
+    } finally {
+      setIsLoadingUrl(false);
+    }
+  };
+
+  const handleVideoPlay = () => {
+    if (activeRecordingModal && currentUser?.id) {
+      recordingsService.trackReplayEvent(activeRecordingModal.id, currentUser.id, 'replay_started');
+    }
+  };
+
+  const handleVideoEnded = () => {
+    if (activeRecordingModal && currentUser?.id && videoRef.current) {
+      const duration = Math.round(videoRef.current.duration || 0);
+      recordingsService.trackReplayEvent(activeRecordingModal.id, currentUser.id, 'replay_completed', duration);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
       {/* Hero Header */}
@@ -40,7 +89,7 @@ export const ArchiveView: React.FC = () => {
             Archivo de Grabaciones
           </h1>
           <p className="text-sand-300 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed">
-            Todas las sesiones guiadas matutinas y mentorías de los lunes grabadas en audio y video para que nunca te quedes atrás en el camino.
+            Todas las sesiones guiadas matutinas y mentorías grabadas en video protegido por RLS para que nunca te quedes atrás en el camino.
           </p>
         </div>
 
@@ -90,7 +139,7 @@ export const ArchiveView: React.FC = () => {
           >
             {/* Thumbnail */}
             <div 
-              onClick={() => setActiveRecordingModal(rec)}
+              onClick={() => handleOpenModal(rec)}
               className="relative aspect-video bg-stone-900 cursor-pointer overflow-hidden"
             >
               <img
@@ -98,12 +147,12 @@ export const ArchiveView: React.FC = () => {
                 alt={rec.title}
                 className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300"
               />
-              <div className="absolute inset-0 bg-stone-900/30 flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-stone-900/80 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+              <div className="absolute inset-0 bg-stone-950/20 group-hover:bg-stone-950/10 transition-colors flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-stone-900/80 text-sand-50 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                   <PlayCircle className="w-6 h-6 text-amber-400" />
                 </div>
               </div>
-              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-stone-900/80 backdrop-blur-sm text-white text-[10px] font-mono font-medium">
+              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-stone-900/90 text-stone-200 text-[10px] font-mono">
                 {rec.duration}
               </span>
             </div>
@@ -111,11 +160,10 @@ export const ArchiveView: React.FC = () => {
             {/* Info */}
             <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between text-[11px] text-stone-400 mb-1">
-                  <span className="font-semibold uppercase tracking-wider text-bronze-700">
-                    {rec.category}
-                  </span>
-                  <span>{new Date(rec.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                <div className="flex items-center gap-2 text-[10px] text-stone-400 mb-1">
+                  <span className="font-semibold text-bronze-700 uppercase tracking-wider">{rec.category}</span>
+                  <span>•</span>
+                  <span>{rec.date}</span>
                 </div>
 
                 <h3 className="font-serif font-bold text-sm sm:text-base text-stone-900 line-clamp-2 leading-snug group-hover:text-bronze-700 transition-colors">
@@ -128,9 +176,9 @@ export const ArchiveView: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-sand-100 flex items-center justify-between">
-                <span className="text-[11px] text-stone-400">{rec.views_count} visualizaciones</span>
+                <span className="text-[11px] text-stone-400">{rec.views_count} reproducciones</span>
                 <button
-                  onClick={() => setActiveRecordingModal(rec)}
+                  onClick={() => handleOpenModal(rec)}
                   className="text-xs font-semibold text-stone-900 hover:text-bronze-700 flex items-center gap-1"
                 >
                   <span>Ver sesión</span>
@@ -141,7 +189,7 @@ export const ArchiveView: React.FC = () => {
         ))}
       </div>
 
-      {/* Video Modal Player */}
+      {/* Video Modal Player (Native HTML5 Video with Signed URL) */}
       {activeRecordingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-stone-950 text-sand-50 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-stone-800 space-y-4 animate-scale-up">
@@ -163,24 +211,48 @@ export const ArchiveView: React.FC = () => {
             </div>
 
             {/* Video Player Box */}
-            <div className="aspect-video rounded-2xl bg-stone-900 border border-stone-800 flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
-              <img
-                src={activeRecordingModal.thumbnail_url}
-                alt={activeRecordingModal.title}
-                className="absolute inset-0 w-full h-full object-cover opacity-40"
-              />
-              <div className="relative z-10">
-                <div className="w-16 h-16 rounded-full bg-bronze-600 text-white flex items-center justify-center shadow-lg mx-auto mb-2 cursor-pointer hover:scale-110 transition-transform">
-                  <PlayCircle className="w-8 h-8" />
+            <div className="aspect-video rounded-2xl bg-stone-900 border border-stone-800 flex flex-col items-center justify-center relative overflow-hidden">
+              {isLoadingUrl ? (
+                <div className="flex flex-col items-center gap-2 text-stone-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+                  <span className="text-xs">Generando enlace seguro firmado...</span>
                 </div>
-                <p className="font-serif font-bold text-white text-base">
-                  Reproduciendo grabación completa
-                </p>
-                <p className="text-xs text-stone-400 mt-1 max-w-md">
-                  {activeRecordingModal.description}
-                </p>
-              </div>
+              ) : accessError ? (
+                <div className="p-6 text-center space-y-3 max-w-sm">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-950/60 text-amber-400 flex items-center justify-center mx-auto border border-amber-800">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-serif font-bold text-white text-base">Acceso Exclusivo</h4>
+                  <p className="text-xs text-stone-400">{accessError}</p>
+                  <Link
+                    to="/membership"
+                    className="travesia-btn-accent text-xs py-2 px-4 inline-block font-semibold"
+                  >
+                    Activar Membresía
+                  </Link>
+                </div>
+              ) : playableUrl ? (
+                <video
+                  ref={videoRef}
+                  controls
+                  autoPlay
+                  controlsList="nodownload"
+                  onPlay={handleVideoPlay}
+                  onEnded={handleVideoEnded}
+                  src={playableUrl}
+                  poster={activeRecordingModal.thumbnail_url}
+                  className="w-full h-full object-cover rounded-2xl"
+                />
+              ) : (
+                <div className="text-center p-6 text-stone-400 text-xs">
+                  Grabación no disponible actualmente.
+                </div>
+              )}
             </div>
+
+            <p className="text-xs text-stone-400 leading-relaxed">
+              {activeRecordingModal.description}
+            </p>
 
             <div className="pt-2 flex justify-end">
               <button

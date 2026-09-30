@@ -1,14 +1,15 @@
 -- ====================================================================
--- TRAVESÍA - PRODUCTION DATABASE SCHEMA (POSTGRESQL / SUPABASE)
--- "Frena el ruido. Encuentra dirección. Haz el trabajo."
--- Canonical Production Schema v2.1
+-- TRAVESÍA MIGRATION 001: INITIAL BASELINE SCHEMA
+-- ====================================================================
+-- PostgreSQL schema for TRAVESÍA production
+-- Version: 2.1 (Production Baseline)
 -- ====================================================================
 
--- 1. EXTENSIONS
+-- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 2. CORE USERS & PROFILES
+-- 2. PROFILES
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -28,44 +29,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. PRICING PLANS & MEMBERSHIPS
-CREATE TABLE IF NOT EXISTS public.pricing_plans (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  price_monthly NUMERIC(10, 2) NOT NULL,
-  price_annual NUMERIC(10, 2),
-  features TEXT[] DEFAULT '{}',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.memberships (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  plan_id TEXT NOT NULL REFERENCES public.pricing_plans(id) DEFAULT 'founding',
-  status TEXT NOT NULL DEFAULT 'TRIAL' CHECK (status IN ('TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED')),
-  started_at TIMESTAMPTZ DEFAULT NOW(),
-  expires_at TIMESTAMPTZ,
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
-  current_period_start TIMESTAMPTZ,
-  current_period_end TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS public.membership_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  membership_id UUID REFERENCES public.memberships(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  event_type TEXT NOT NULL,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 4. COMMUNITY, CHANNELS, POSTS & INTERACTIONS
+-- 3. COMMUNITIES
 CREATE TABLE IF NOT EXISTS public.communities (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
@@ -77,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.communities (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. COMMUNITY MEMBERS
 CREATE TABLE IF NOT EXISTS public.community_members (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   community_id UUID REFERENCES public.communities(id) ON DELETE CASCADE,
@@ -86,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.community_members (
   UNIQUE(community_id, user_id)
 );
 
+-- 5. CHANNELS
 CREATE TABLE IF NOT EXISTS public.channels (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   community_id UUID REFERENCES public.communities(id) ON DELETE CASCADE,
@@ -99,6 +65,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
   UNIQUE(community_id, slug)
 );
 
+-- 6. POSTS
 CREATE TABLE IF NOT EXISTS public.posts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   channel_id UUID REFERENCES public.channels(id) ON DELETE CASCADE,
@@ -114,6 +81,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. COMMENTS
 CREATE TABLE IF NOT EXISTS public.comments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -125,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.comments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8. POST REACTIONS
 CREATE TABLE IF NOT EXISTS public.post_reactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -134,6 +103,7 @@ CREATE TABLE IF NOT EXISTS public.post_reactions (
   UNIQUE(post_id, user_id, reaction_type)
 );
 
+-- 9. BOOKMARKS
 CREATE TABLE IF NOT EXISTS public.bookmarks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -142,7 +112,7 @@ CREATE TABLE IF NOT EXISTS public.bookmarks (
   UNIQUE(user_id, post_id)
 );
 
--- 5. EVENTS & ATTENDANCE
+-- 10. EVENTS
 CREATE TABLE IF NOT EXISTS public.events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
@@ -164,6 +134,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 11. EVENT ATTENDEES (SEPARATE TRACKING: REGISTERED, JOIN CLICK, ATTENDED)
 CREATE TABLE IF NOT EXISTS public.event_attendees (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
@@ -176,33 +147,7 @@ CREATE TABLE IF NOT EXISTS public.event_attendees (
   UNIQUE(event_id, user_id)
 );
 
--- 6. SESSION RECORDINGS (ARCHIVE METADATA)
-CREATE TABLE IF NOT EXISTS public.session_recordings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  event_id UUID REFERENCES public.events(id) ON DELETE SET NULL,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
-  storage_path TEXT,
-  file_size_bytes BIGINT,
-  duration_seconds INTEGER DEFAULT 2100,
-  thumbnail_path TEXT,
-  uploaded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  uploaded_at TIMESTAMPTZ DEFAULT NOW(),
-  status TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK (status IN ('NOT_AVAILABLE', 'PROCESSING', 'AVAILABLE', 'ERROR')),
-  date DATE NOT NULL DEFAULT CURRENT_DATE,
-  duration TEXT NOT NULL DEFAULT '35 min',
-  category TEXT NOT NULL DEFAULT 'El Presente',
-  video_url TEXT,
-  thumbnail_url TEXT,
-  zoom_recording_url TEXT,
-  recording_strategy TEXT NOT NULL DEFAULT 'HOSTED' CHECK (recording_strategy IN ('HOSTED', 'EXTERNAL')),
-  external_url TEXT,
-  views_count INTEGER DEFAULT 0,
-  is_member_only BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 7. FORMACIÓN / LESSONS & CURRICULUM
+-- 12. LESSON SECTIONS
 CREATE TABLE IF NOT EXISTS public.lesson_sections (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
@@ -211,6 +156,7 @@ CREATE TABLE IF NOT EXISTS public.lesson_sections (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 13. LESSONS
 CREATE TABLE IF NOT EXISTS public.lessons (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   section_id UUID REFERENCES public.lesson_sections(id) ON DELETE CASCADE,
@@ -226,6 +172,7 @@ CREATE TABLE IF NOT EXISTS public.lessons (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 14. LESSON PROGRESS
 CREATE TABLE IF NOT EXISTS public.lesson_progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -236,6 +183,7 @@ CREATE TABLE IF NOT EXISTS public.lesson_progress (
   UNIQUE(user_id, lesson_id)
 );
 
+-- 15. DAILY PROMPTS
 CREATE TABLE IF NOT EXISTS public.daily_prompts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   prompt_text TEXT NOT NULL,
@@ -247,6 +195,7 @@ CREATE TABLE IF NOT EXISTS public.daily_prompts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 16. FOUR WEEK CYCLES (JOURNEY CYCLES)
 CREATE TABLE IF NOT EXISTS public.four_week_cycles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   cycle_number INTEGER NOT NULL,
@@ -257,6 +206,7 @@ CREATE TABLE IF NOT EXISTS public.four_week_cycles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 17. CYCLE PROGRESS (JOURNEY PROGRESS)
 CREATE TABLE IF NOT EXISTS public.cycle_progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -271,7 +221,7 @@ CREATE TABLE IF NOT EXISTS public.cycle_progress (
   UNIQUE(user_id, cycle_id)
 );
 
--- 8. EMOTIONS (REFERENCE CATALOG)
+-- 18. EMOTIONS (REFERENCE CATALOG)
 CREATE TABLE IF NOT EXISTS public.emotions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL CHECK (name IN ('DOLOR', 'SOLEDAD', 'TRISTEZA', 'IRA', 'MIEDO', 'VERGÜENZA', 'CULPA', 'ALEGRÍA')),
@@ -279,7 +229,7 @@ CREATE TABLE IF NOT EXISTS public.emotions (
   description TEXT
 );
 
--- 9. JOURNAL SESSIONS (STRICTLY PRIVATE - ENFORCED BY ROW LEVEL SECURITY)
+-- 19. JOURNAL SESSIONS (STRICTLY PRIVATE - ENFORCED BY ROW LEVEL SECURITY)
 CREATE TABLE IF NOT EXISTS public.journal_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -310,6 +260,7 @@ CREATE TABLE IF NOT EXISTS public.journal_sessions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 20. JOURNAL ENTRIES (SUB-ELEMENTS)
 CREATE TABLE IF NOT EXISTS public.journal_entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID REFERENCES public.journal_sessions(id) ON DELETE CASCADE,
@@ -320,6 +271,7 @@ CREATE TABLE IF NOT EXISTS public.journal_entries (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 21. USER EMOTIONS (PER SESSION)
 CREATE TABLE IF NOT EXISTS public.user_emotions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID REFERENCES public.journal_sessions(id) ON DELETE CASCADE,
@@ -329,6 +281,7 @@ CREATE TABLE IF NOT EXISTS public.user_emotions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 22. ACTION COMMITMENTS
 CREATE TABLE IF NOT EXISTS public.action_commitments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -341,29 +294,7 @@ CREATE TABLE IF NOT EXISTS public.action_commitments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.journal_drafts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE,
-  current_movement_step INTEGER DEFAULT 1 CHECK (current_movement_step BETWEEN 1 AND 5),
-  draft_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 10. DAILY 7-DAY CHALLENGE PROGRESS
-CREATE TABLE IF NOT EXISTS public.daily_challenge_progress (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 7),
-  started_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  prompt TEXT NOT NULL,
-  reflection TEXT,
-  status TEXT DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'skipped')),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, day)
-);
-
--- 11. BOOKS & RESOURCES
+-- 23. BOOKS
 CREATE TABLE IF NOT EXISTS public.books (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
@@ -376,6 +307,7 @@ CREATE TABLE IF NOT EXISTS public.books (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 24. RESOURCES
 CREATE TABLE IF NOT EXISTS public.resources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
@@ -386,7 +318,7 @@ CREATE TABLE IF NOT EXISTS public.resources (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 12. NOTIFICATIONS & PREFERENCES
+-- 25. NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -398,6 +330,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 26. USER PREFERENCES
 CREATE TABLE IF NOT EXISTS public.user_preferences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE,
@@ -410,6 +343,7 @@ CREATE TABLE IF NOT EXISTS public.user_preferences (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 27. ADMIN ROLES (SERVER-SIDE SECURED)
 CREATE TABLE IF NOT EXISTS public.admin_roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE,
@@ -418,106 +352,11 @@ CREATE TABLE IF NOT EXISTS public.admin_roles (
   assigned_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 13. BUSINESS, LEADS, REFERRALS, ANALYTICS & LOGS
-CREATE TABLE IF NOT EXISTS public.leads (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT NOT NULL,
-  name TEXT,
-  source TEXT NOT NULL DEFAULT 'Direct' CHECK (source IN ('Instagram', 'TikTok', 'YouTube', 'Newsletter', 'Referral', 'Direct', 'Other')),
-  campaign TEXT,
-  landing_page TEXT DEFAULT '/',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  trial_started BOOLEAN DEFAULT false,
-  trial_completed BOOLEAN DEFAULT false,
-  converted BOOLEAN DEFAULT false,
-  converted_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS public.referrals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  referral_code TEXT NOT NULL,
-  referrer_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  referred_user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'converted')),
-  clicked_at TIMESTAMPTZ DEFAULT NOW(),
-  converted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.customer_interviews (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  interviewer_name TEXT NOT NULL,
-  interviewee_name TEXT NOT NULL,
-  interviewee_email TEXT,
-  notes TEXT NOT NULL,
-  insights TEXT[] DEFAULT '{}',
-  conducted_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.feedback_responses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  day_milestone INTEGER NOT NULL CHECK (day_milestone IN (3, 7, 14, 28)),
-  most_useful TEXT NOT NULL,
-  what_to_change TEXT NOT NULL,
-  mindset_shift TEXT NOT NULL,
-  would_return TEXT NOT NULL CHECK (would_return IN ('yes', 'maybe', 'no')),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.content_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('Instagram', 'TikTok', 'YouTube', 'Newsletter', 'Community')),
-  status TEXT NOT NULL DEFAULT 'Idea' CHECK (status IN ('Idea', 'Draft', 'Ready', 'Published')),
-  scheduled_date DATE,
-  published_date TIMESTAMPTZ,
-  cta TEXT,
-  campaign TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.analytics_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  event_name TEXT NOT NULL,
-  source TEXT DEFAULT 'web',
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.email_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  user_email TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'event_created' CHECK (status IN ('event_created', 'sent', 'delivered', 'failed')),
-  payload JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  sent_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS public.business_settings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  business_experiment_mode BOOLEAN DEFAULT true,
-  founding_membership_price_monthly NUMERIC(10, 2) DEFAULT 29.00,
-  standard_membership_price_monthly NUMERIC(10, 2) DEFAULT 39.00,
-  annual_discount_months INTEGER DEFAULT 2,
-  limited_seats_count INTEGER DEFAULT 20,
-  whatsapp_group_url TEXT,
-  telegram_url TEXT,
-  discord_url TEXT,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- ====================================================================
--- FUNCTIONS, TRIGGERS & RLS
+-- HELPER FUNCTIONS FOR SERVER-SIDE AUTHORIZATION & TRIGGERS
 -- ====================================================================
 
+-- Function to check if a user is an admin server-side
 CREATE OR REPLACE FUNCTION public.is_admin(user_uid UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -531,6 +370,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Function to automatically handle new user registration in auth.users
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -559,58 +399,23 @@ BEGIN
   VALUES (NEW.id)
   ON CONFLICT (user_id) DO NOTHING;
 
-  -- Create trial membership record
-  INSERT INTO public.memberships (user_id, plan_id, status, started_at, expires_at)
-  VALUES (NEW.id, 'trial', 'TRIAL', NOW(), NOW() + INTERVAL '7 days')
-  ON CONFLICT (user_id) DO NOTHING;
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Trigger on auth.users
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Enable RLS on all tables
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memberships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.membership_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pricing_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.communities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.community_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bookmarks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.event_attendees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.session_recordings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lesson_sections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lesson_progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.daily_prompts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.four_week_cycles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cycle_progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.emotions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.journal_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.journal_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_emotions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.action_commitments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.journal_drafts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.daily_challenge_progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.books ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admin_roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.customer_interviews ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.feedback_responses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.content_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.email_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_posts_channel_id ON public.posts(channel_id);
+CREATE INDEX IF NOT EXISTS idx_posts_author_id ON public.posts(author_id);
+CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_events_start_time ON public.events(start_time);
+CREATE INDEX IF NOT EXISTS idx_events_status ON public.events(status);
+CREATE INDEX IF NOT EXISTS idx_journal_sessions_user_date ON public.journal_sessions(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_journal_sessions_status ON public.journal_sessions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id, read);

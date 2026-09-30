@@ -1,10 +1,11 @@
 export type UserRole = 'member' | 'coach' | 'admin';
 
-export type MembershipStatus = 'FREE' | 'TRIAL' | 'ACTIVE' | 'PAUSED' | 'CANCELLED';
+export type MembershipStatus = 'FREE' | 'TRIAL' | 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'EXPIRED';
 
 export interface Profile {
   id: string;
   name: string;
+  email?: string;
   avatar_url: string;
   bio: string;
   location?: string;
@@ -449,5 +450,33 @@ export interface ProductLogEntry {
   status: 'OBSERVED' | 'TESTING' | 'KEPT' | 'REMOVED';
   created_at: string;
 }
+
+export interface UserPreferences {
+  id?: string;
+  user_id: string;
+  daily_reminder_enabled: boolean;
+  daily_reminder_time: string;
+  session_reminder_enabled: boolean;
+  community_notifications: boolean;
+  email_notifications: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MembershipRecord {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  status: 'TRIAL' | 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'EXPIRED';
+  started_at: string;
+  expires_at?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 
 

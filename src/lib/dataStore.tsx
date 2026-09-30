@@ -199,21 +199,47 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Listen to auth state changes from Supabase
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setIsAuthenticated(true);
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (profile) {
+          setCurrentUser(profile as Profile);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Load initial data from Supabase if configured, or use local state
   useEffect(() => {
     async function loadInitial() {
       setIsLoading(true);
       if (isSupabaseConfigured) {
         try {
-          // Check Supabase session
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData.session?.user) {
+          // Check Supabase session via getUser()
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
             setIsAuthenticated(true);
             const { data: profile } = await supabase
               .from('profiles')
               .select('*')
-              .eq('id', sessionData.session.user.id)
-              .single();
+              .eq('id', userData.user.id)
+              .maybeSingle();
 
             if (profile) setCurrentUser(profile as Profile);
           } else {

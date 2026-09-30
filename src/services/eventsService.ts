@@ -130,16 +130,43 @@ export const eventsService = {
         return { event: null, error: error.message };
       }
 
-      return {
-        event: {
-          ...data,
-          attendees_count: 0,
-          user_is_registered: false,
-        } as EventItem,
-        error: null,
-      };
-    } catch (err: any) {
-      return { event: null, error: err?.message || 'Error al programar evento en el servidor.' };
+        return {
+          event: {
+            ...data,
+            attendees_count: 0,
+            user_is_registered: false,
+          } as EventItem,
+          error: null,
+        };
+      } catch (err: any) {
+        return { event: null, error: err?.message || 'Error al programar evento en el servidor.' };
+      }
+    },
+
+  // Track Zoom join button click (join_click, NOT attendance)
+  async recordZoomJoinClick(eventId: string, userId: string): Promise<void> {
+    if (!eventId || !userId) return;
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('event_attendees')
+          .update({ joined_zoom_at: new Date().toISOString() })
+          .eq('event_id', eventId)
+          .eq('user_id', userId);
+
+        // Track in analytics_events
+        await supabase
+          .from('analytics_events')
+          .insert({
+            user_id: userId,
+            event_name: 'zoom_join_clicked',
+            source: 'events_view',
+            metadata: { event_id: eventId, interaction_type: 'join_click' },
+          });
+      } catch {
+        // Non-blocking telemetry
+      }
     }
   }
 };

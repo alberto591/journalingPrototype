@@ -1,7 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
 import { DataStoreProvider } from './lib/dataStore';
 import { AppShell } from './components/layout/AppShell';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { DashboardPage } from './pages/DashboardPage';
 import { CommunityPage } from './pages/CommunityPage';
 import { JournalPage } from './pages/JournalPage';
@@ -21,71 +24,94 @@ import { ReferralHandlerPage } from './pages/ReferralHandlerPage';
 import { FounderPage } from './pages/FounderPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { HealthCheckPage } from './pages/HealthCheckPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { TermsPage } from './pages/TermsPage';
 
 export function App() {
   return (
-    <DataStoreProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Marketing & Growth Routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/prueba" element={<FreeTrialPage />} />
-          <Route path="/membership" element={<PricingPage />} />
-          <Route path="/fundador" element={<FounderPage />} />
-          <Route path="/r/:code" element={<ReferralHandlerPage />} />
+    <QueryClientProvider client={queryClient}>
+      <DataStoreProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Marketing & Growth Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/prueba" element={<FreeTrialPage />} />
+            <Route path="/membership" element={<PricingPage />} />
+            <Route path="/fundador" element={<FounderPage />} />
+            <Route path="/r/:code" element={<ReferralHandlerPage />} />
 
-          {/* Standalone Auth & Onboarding */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<LoginPage />} />
-          <Route path="/onboarding" element={<OnboardingWizard />} />
+            {/* Public Legal & Observability Routes */}
+            <Route path="/health" element={<HealthCheckPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
 
-          {/* Member App Layout (Protected Sanctuary Shell) */}
-          <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            
-            {/* Community & Channels */}
-            <Route path="community" element={<CommunityPage />} />
-            <Route path="community/:channel" element={<CommunityPage />} />
-            
-            {/* Guided Journaling */}
-            <Route path="journal" element={<JournalPage />} />
-            <Route path="journal/today" element={<JournalPage />} />
-            <Route path="journal/history" element={<JournalPage />} />
+            {/* Standalone Auth & Onboarding */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<LoginPage />} />
+            <Route path="/onboarding" element={<OnboardingWizard />} />
 
-            {/* 4-Week Journey & Curriculum */}
-            <Route path="journey" element={<FourWeekJourneyView />} />
-            <Route path="journey/week/:week" element={<FourWeekJourneyView />} />
-            
-            {/* Events & Live Sessions */}
-            <Route path="events" element={<EventsView />} />
-            <Route path="events/:id" element={<EventsView />} />
+            {/* Member App Layout (Protected Sanctuary Shell) */}
+            <Route 
+              element={
+                <ProtectedRoute>
+                  <AppShell />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              
+              {/* Community & Channels */}
+              <Route path="community" element={<CommunityPage />} />
+              <Route path="community/:channel" element={<CommunityPage />} />
+              
+              {/* Guided Journaling */}
+              <Route path="journal" element={<JournalPage />} />
+              <Route path="journal/today" element={<JournalPage />} />
+              <Route path="journal/history" element={<JournalPage />} />
 
-            {/* Formación / Lecciones */}
-            <Route path="lessons" element={<LessonsView />} />
-            <Route path="lessons/:id" element={<LessonsView />} />
+              {/* 4-Week Journey & Curriculum */}
+              <Route path="journey" element={<FourWeekJourneyView />} />
+              <Route path="journey/week/:week" element={<FourWeekJourneyView />} />
+              
+              {/* Events & Live Sessions */}
+              <Route path="events" element={<EventsView />} />
+              <Route path="events/:id" element={<EventsView />} />
 
-            {/* Resources, Books & Archive */}
-            <Route path="library" element={<LibraryView />} />
-            <Route path="archive" element={<ArchiveView />} />
+              {/* Formación / Lecciones */}
+              <Route path="lessons" element={<LessonsView />} />
+              <Route path="lessons/:id" element={<LessonsView />} />
 
-            {/* Members & Progress */}
-            <Route path="members" element={<MembersView />} />
-            <Route path="members/:id" element={<MembersView />} />
-            <Route path="progress" element={<ProgressView />} />
+              {/* Resources, Books & Archive */}
+              <Route path="library" element={<LibraryView />} />
+              <Route path="archive" element={<ArchiveView />} />
 
-            {/* Profile & Settings */}
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="settings" element={<ProfilePage />} />
+              {/* Members & Progress */}
+              <Route path="members" element={<MembersView />} />
+              <Route path="members/:id" element={<MembersView />} />
+              <Route path="progress" element={<ProgressView />} />
 
-            {/* Admin Console */}
-            <Route path="admin" element={<AdminDashboard />} />
+              {/* Profile & Settings */}
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<ProfilePage />} />
 
-            {/* Catch-all */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </DataStoreProvider>
+              {/* Admin Console (Strictly requires admin role) */}
+              <Route 
+                path="admin" 
+                element={
+                  <ProtectedRoute requireAdmin={true}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Catch-all within shell */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </DataStoreProvider>
+    </QueryClientProvider>
   );
 }
 
