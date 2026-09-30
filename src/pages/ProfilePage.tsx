@@ -143,7 +143,7 @@ export const ProfilePage: React.FC = () => {
             <label className="flex items-center justify-between p-3 rounded-xl bg-sand-50 border border-sand-200 cursor-pointer">
               <div>
                 <p className="text-xs font-semibold text-stone-900">Recordatorio Diario de Journaling</p>
-                <p className="text-[11px] text-stone-500">Aviso matutino para iniciar tus 5 movimientos a las 07:00 AM</p>
+                <p className="text-[11px] text-stone-500">Aviso matutino para iniciar tus 5 movimientos a las 08:00 AM (CET)</p>
               </div>
               <input
                 type="checkbox"

@@ -203,7 +203,7 @@ export const PricingPage: React.FC = () => {
               <div className="space-y-2.5 text-xs text-sand-200 border-t border-stone-800 pt-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <span>Acceso ilimitado a todas las sesiones matutinas en vivo (L-V 07:00 AM).</span>
+                  <span>Acceso ilimitado a todas las sesiones matutinas en vivo (L-V 08:00 AM CET).</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />

@@ -294,7 +294,7 @@ export const LandingPage: React.FC = () => {
             <div className="bg-stone-950 text-sand-50 rounded-3xl p-6 sm:p-8 space-y-6 border border-stone-800 shadow-xl">
               <div className="flex items-center justify-between border-b border-stone-800 pb-3">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400">
-                  SESIÓN EN DIRECTO · 07:00 AM
+                  SESIÓN EN DIRECTO · 08:00 AM (CET)
                 </span>
                 <span className="flex items-center gap-1.5 text-xs text-emerald-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> En vivo
@@ -406,7 +406,7 @@ export const LandingPage: React.FC = () => {
               <Calendar className="w-6 h-6 text-amber-400" />
               <h3 className="font-serif font-bold text-lg text-white">Lunes a Viernes</h3>
               <p className="text-xs text-sand-400 leading-relaxed">
-                Dos horarios en directo (07:00 AM y 20:00 PM CET) para adaptarse a tus responsabilidades familiares y laborales.
+                Sesión en directo cada mañana a las 08:00 AM (CET) para arrancar tu jornada con claridad, silencio guiado y dirección.
               </p>
             </div>
 

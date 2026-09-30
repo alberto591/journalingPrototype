@@ -107,7 +107,7 @@ export const FounderPage: React.FC = () => {
                 <span>Facilitador del Silencio</span>
               </div>
               <p className="text-xs text-stone-600 leading-relaxed">
-                Abro la sala virtual a las 07:00 AM, introduzco la pregunta del día, sostengo el temporizador de quietud y modero el espacio con sobriedad.
+                Abro la sala virtual a las 08:00 AM (CET), introduzco la pregunta del día, sostengo el temporizador de quietud y modero el espacio con sobriedad.
               </p>
             </div>
 

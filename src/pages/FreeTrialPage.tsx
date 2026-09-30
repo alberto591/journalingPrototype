@@ -503,7 +503,7 @@ export const FreeTrialPage: React.FC = () => {
                   </div>
 
                   <p className="text-xs text-sand-400 leading-relaxed max-w-xl">
-                    Cada mañana a las 07:00 AM (CET) nos reunimos en directo para hacer este trabajo juntos. Sin ruido, sin dogmas, con una comunidad de personas sobrias que no quieren dispersar su vida.
+                    Cada mañana a las 08:00 AM (CET) nos reunimos en directo para hacer este trabajo juntos. Sin ruido, sin dogmas, con una comunidad de personas sobrias que no quieren dispersar su vida.
                   </p>
                 </div>
 
