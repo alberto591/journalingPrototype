@@ -10,8 +10,7 @@
 
 DO $$
 DECLARE
-  -- >>> SUSTITUYE ESTE EMAIL POR EL TUYO <<<
-  target_email TEXT := 'tu_email@ejemplo.com';
+  target_email TEXT := 'albertocalvorivas@gmail.com';
   target_user_id UUID;
 BEGIN
   -- 1. Localizar usuario registrado
