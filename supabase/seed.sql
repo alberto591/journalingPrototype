@@ -3,20 +3,25 @@
 -- Canonical Production Prompt Catalog, Channels, Modules & Books
 -- ====================================================================
 
--- 1. CHANNELS
-INSERT INTO channels (id, slug, name, description, icon_name, order_index) VALUES
-  ('ch-general', 'conversacion-principal', 'Conversación principal', 'Punto de encuentro de la comunidad TRAVESÍA. Reflexiones compartidas, preguntas y fraternidad.', 'flame', 1),
-  ('ch-journal', 'sesiones-de-diario', 'Sesiones de diario', 'Espacio para compartir compromisos del día, descubrimientos tras la práctica y rendición de cuentas.', 'check-circle-2', 2),
-  ('ch-start', 'empezar-aqui', 'Empezar aquí', 'Bienvenida para nuevos miembros, orientación metodológica, acuerdos de honor y guía de inicio.', 'compass', 3),
-  ('ch-noise', 'el-ruido', 'El Ruido', 'Estrategias y reflexiones sobre cómo desacelerar, silenciar estímulos y proteger la atención.', 'waves', 4),
-  ('ch-vision', 'la-vision', 'La Visión', 'Descubrimiento de propósito, vocación, alineación con la voluntad divina y legado familiar.', 'eye', 5),
-  ('ch-obstacles', 'los-obstaculos', 'Los Obstáculos', 'Identificación honesta de patrones de evasión, orgullo, miedos no resueltos y mentiras internas.', 'shield-alert', 6),
-  ('ch-work', 'el-trabajo', 'El Trabajo', 'La forja diaria: disciplina, conversaciones difíciles, sacrificios necesarios y compromisos cumplidos.', 'hammer', 7),
-  ('ch-library', 'biblioteca', 'Biblioteca', 'Recomendaciones de lecturas esenciales, desgloses de libros fundamentales y notas de estudio.', 'book-open', 8),
-  ('ch-archive', 'archivo', 'Archivo', 'Grabaciones de todas las sesiones guiadas en directo, mentorías grupales y talleres de formación.', 'film', 9)
-ON CONFLICT (slug) DO NOTHING;
+-- 1. CHANNELS (Auto-generated UUIDs, idempotent insertion)
+INSERT INTO channels (slug, name, description, icon_name, order_index)
+SELECT v.slug, v.name, v.description, v.icon_name, v.order_index
+FROM (VALUES
+  ('conversacion-principal', 'Conversación principal', 'Punto de encuentro de la comunidad TRAVESÍA. Reflexiones compartidas, preguntas y fraternidad.', 'flame', 1),
+  ('sesiones-de-diario', 'Sesiones de diario', 'Espacio para compartir compromisos del día, descubrimientos tras la práctica y rendición de cuentas.', 'check-circle-2', 2),
+  ('empezar-aqui', 'Empezar aquí', 'Bienvenida para nuevos miembros, orientación metodológica, acuerdos de honor y guía de inicio.', 'compass', 3),
+  ('el-ruido', 'El Ruido', 'Estrategias y reflexiones sobre cómo desacelerar, silenciar estímulos y proteger la atención.', 'waves', 4),
+  ('la-vision', 'La Visión', 'Descubrimiento de propósito, vocación, alineación con la voluntad divina y legado familiar.', 'eye', 5),
+  ('los-obstaculos', 'Los Obstáculos', 'Identificación honesta de patrones de evasión, orgullo, miedos no resueltos y mentiras internas.', 'shield-alert', 6),
+  ('el-trabajo', 'El Trabajo', 'La forja diaria: disciplina, conversaciones difíciles, sacrificios necesarios y compromisos cumplidos.', 'hammer', 7),
+  ('biblioteca', 'Biblioteca', 'Recomendaciones de lecturas esenciales, desgloses de libros fundamentales y notas de estudio.', 'book-open', 8),
+  ('archivo', 'Archivo', 'Grabaciones de todas las sesiones guiadas en directo, mentorías grupales y talleres de formación.', 'film', 9)
+) AS v(slug, name, description, icon_name, order_index)
+WHERE NOT EXISTS (
+  SELECT 1 FROM channels c WHERE c.slug = v.slug
+);
 
--- 2. EMOTIONS CATALOG
+-- 2. EMOTIONS CATALOG (Reference Catalog)
 INSERT INTO emotions (name, prompt_question, description) VALUES
   ('DOLOR', '¿Qué herida o situación te está doliendo en este momento?', 'Sensación de herida, pérdida o quebranto físico o emocional.'),
   ('SOLEDAD', '¿En qué aspecto de tu camino te sientes incomprendido o desacompañado?', 'Aislamiento, sensación de no tener con quién compartir la carga.'),
@@ -30,11 +35,15 @@ ON CONFLICT (name) DO NOTHING;
 
 -- 3. FOUR WEEK CYCLES
 INSERT INTO four_week_cycles (cycle_number, week_1_theme, week_2_theme, week_3_theme, week_4_theme)
-VALUES (1, 'EL PRESENTE: Construir la práctica diaria', 'LA VISIÓN: Qué vida buscas construir', 'LOS OBSTÁCULOS: Qué se interpone en tu camino', 'EL TRABAJO: Lo que realmente requerirá de ti')
-ON CONFLICT DO NOTHING;
+SELECT 1, 'EL PRESENTE: Construir la práctica diaria', 'LA VISIÓN: Qué vida buscas construir', 'LOS OBSTÁCULOS: Qué se interpone en tu camino', 'EL TRABAJO: Lo que realmente requerirá de ti'
+WHERE NOT EXISTS (
+  SELECT 1 FROM four_week_cycles WHERE cycle_number = 1
+);
 
--- 4. CANONICAL PROMPTS SAMPLE (The 102 prompts are managed through the database engine)
-INSERT INTO daily_prompts (prompt_text, category, week, difficulty, active) VALUES
+-- 4. CANONICAL PROMPTS SAMPLE
+INSERT INTO daily_prompts (prompt_text, category, week, difficulty, active)
+SELECT v.prompt_text, v.category, v.week, v.difficulty, v.active
+FROM (VALUES
   ('¿Qué pensamiento recurrente has estado repitiendo en bucle durante las últimas 48 horas sin darte cuenta?', 'Ruido', 1, 'suave', true),
   ('¿Qué distracción externa estás usando deliberadamente para no quedarte a solas con tus pensamientos?', 'Ruido', 1, 'profundo', true),
   ('¿Qué conversación inconclusa sigue consumiendo batería en el fondo de tu mente?', 'Ruido', 1, 'suave', true),
@@ -50,4 +59,7 @@ INSERT INTO daily_prompts (prompt_text, category, week, difficulty, active) VALU
   ('Señor, ¿qué verdad sobre mi vida he estado intentando ocultarte a Ti y a mí mismo?', 'Espiritualidad', 1, 'profundo', true),
   ('¿En qué área de tu vida estás tratando de tener el control absoluto en vez de confiar en Dios?', 'Espiritualidad', 1, 'profundo', true),
   ('¿En qué área de tu vida sabes con exactitud qué hacer pero no lo estás ejecutando?', 'Disciplina', 4, 'desafiante', true)
-ON CONFLICT DO NOTHING;
+) AS v(prompt_text, category, week, difficulty, active)
+WHERE NOT EXISTS (
+  SELECT 1 FROM daily_prompts dp WHERE dp.prompt_text = v.prompt_text
+);
