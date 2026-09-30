@@ -676,12 +676,12 @@ export const contentService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error || !data || data.length === 0) {
-        return INITIAL_CONTENT_ITEMS;
+      if (error) {
+        return [];
       }
-      return data as ContentItem[];
+      return (data as ContentItem[]) || [];
     } catch {
-      return INITIAL_CONTENT_ITEMS;
+      return [];
     }
   },
 

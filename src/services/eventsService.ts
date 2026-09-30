@@ -6,7 +6,7 @@ export const eventsService = {
   // Fetch events list with real registration status for user
   async fetchEvents(userId?: string): Promise<{ events: EventItem[]; error: string | null }> {
     if (!isSupabaseConfigured) {
-      return { events: DEMO_EVENTS, error: null };
+      return { events: [], error: null };
     }
 
     try {
@@ -19,7 +19,7 @@ export const eventsService = {
         .order('date', { ascending: true });
 
       if (error) {
-        return { events: DEMO_EVENTS, error: error.message };
+        return { events: [], error: error.message };
       }
 
       const formatted: EventItem[] = (data || []).map((e: any) => {
@@ -36,14 +36,16 @@ export const eventsService = {
             weekday: 'short', 
             hour: '2-digit', 
             minute: '2-digit' 
-          }) : '07:00 AM',
+          }) : '08:00 AM',
           duration_minutes: e.duration_minutes || 35,
           type: e.type || 'standard',
           host_name: e.host_name || 'Alberto Calvo',
           host_avatar: e.host_avatar || '/alberto-calvo.png',
           description: e.description || '',
+          theme: e.theme,
           meeting_url: e.meeting_url,
           recording_url: e.recording_url,
+          recording_id: e.recording_id,
           status: e.status || 'upcoming',
           attendees_count: attendees.length,
           user_is_registered: isUserRegistered,
@@ -52,7 +54,7 @@ export const eventsService = {
 
       return { events: formatted, error: null };
     } catch (err: any) {
-      return { events: DEMO_EVENTS, error: err?.message || 'Error al obtener eventos.' };
+      return { events: [], error: err?.message || 'Error al obtener eventos.' };
     }
   },
 

@@ -98,10 +98,10 @@ export const interviewAndLogService = {
         .from('product_logs')
         .select('*')
         .order('created_at', { ascending: false });
-      if (error || !data || data.length === 0) return INITIAL_PRODUCT_LOGS;
-      return data as ProductLogEntry[];
+      if (error) return [];
+      return (data as ProductLogEntry[]) || [];
     } catch {
-      return INITIAL_PRODUCT_LOGS;
+      return [];
     }
   },
 

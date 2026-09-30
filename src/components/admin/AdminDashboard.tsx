@@ -451,13 +451,13 @@ export const AdminDashboard: React.FC = () => {
   const payingFoundersCount = payingMembers.length;
   const targetCohort = 10;
   const remainingTarget = Math.max(0, targetCohort - payingFoundersCount);
-  const trialsCompletedCount = leads.filter(l => l.trial_completed).length || 6;
-  const trialsStartedCount = leads.filter(l => l.trial_started).length || Math.min(leads.length, 12);
+  const trialsCompletedCount = leads.filter(l => l.trial_completed).length;
+  const trialsStartedCount = leads.filter(l => l.trial_started).length;
   const conversionRate = trialsCompletedCount > 0 ? Math.round((payingFoundersCount / trialsCompletedCount) * 100) : 0;
-  const challengeCompletionRate = trialsStartedCount > 0 ? Math.round((trialsCompletedCount / trialsStartedCount) * 100) : 50;
+  const challengeCompletionRate = trialsStartedCount > 0 ? Math.round((trialsCompletedCount / trialsStartedCount) * 100) : 0;
   const totalFeedbackAndInterviews = feedbacks.length + interviews.length;
   const renewalIntentPositiveCount = interviews.filter(i => i.would_pay_again === 'yes').length + feedbacks.filter(f => f.would_return === 'yes').length;
-  const renewalIntentRate = totalFeedbackAndInterviews > 0 ? Math.round((renewalIntentPositiveCount / totalFeedbackAndInterviews) * 100) : 100;
+  const renewalIntentRate = totalFeedbackAndInterviews > 0 ? Math.round((renewalIntentPositiveCount / totalFeedbackAndInterviews) * 100) : 0;
 
   return (
     <div className="max-w-5xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
@@ -620,8 +620,8 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
               <div className="p-4 rounded-2xl bg-sand-50 border border-sand-200">
                 <span className="text-[10px] uppercase font-bold text-stone-500">1. Tráfico</span>
-                <p className="font-serif font-bold text-2xl text-stone-900">~180</p>
-                <p className="text-[10px] text-stone-500">Visitas landing</p>
+                <p className="font-serif font-bold text-2xl text-stone-900">{leads.length > 0 ? `${leads.length * 3}` : '0'}</p>
+                <p className="text-[10px] text-stone-500">Visitas estimadas</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-sand-50 border border-sand-200">

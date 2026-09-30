@@ -149,9 +149,9 @@ export const businessService = {
 
     // Live session attendance metrics
     const sortedEvents = [...(eventAttendees || [])].sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
-    const firstSessionAttendance = sortedEvents[0]?.attendees_count || (sortedEvents[0] ? 8 : 0);
-    const secondSessionAttendance = sortedEvents[1]?.attendees_count || (sortedEvents[1] ? 7 : 0);
-    const thirdSessionAttendance = sortedEvents[2]?.attendees_count || (sortedEvents[2] ? 6 : 0);
+    const firstSessionAttendance = sortedEvents[0]?.attendees_count || 0;
+    const secondSessionAttendance = sortedEvents[1]?.attendees_count || 0;
+    const thirdSessionAttendance = sortedEvents[2]?.attendees_count || 0;
     const totalEventAttendees = sortedEvents.reduce((acc, ev) => acc + (ev.attendees_count || 0), 0);
     const averageAttendance = sortedEvents.length > 0 ? Math.round((totalEventAttendees / sortedEvents.length) * 10) / 10 : 0;
 

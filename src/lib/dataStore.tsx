@@ -213,6 +213,19 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return saved ? JSON.parse(saved) : [];
   });
   const [events, setEvents] = useState<EventItem[]>(() => {
+    if (isSupabaseConfigured) {
+      try {
+        const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}events`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.some(e => e.id === 'evt-1')) {
+            return [];
+          }
+          return parsed;
+        }
+      } catch {}
+      return [];
+    }
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}events`);
     return saved ? JSON.parse(saved) : DEMO_EVENTS;
   });
@@ -222,6 +235,19 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const [books] = useState<Book[]>(BOOKS_DATA);
   const [recordings, setRecordings] = useState<SessionRecording[]>(() => {
+    if (isSupabaseConfigured) {
+      try {
+        const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}recordings`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.some(r => r.id === 'rec-1')) {
+            return [];
+          }
+          return parsed;
+        }
+      } catch {}
+      return [];
+    }
     try {
       const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}recordings`);
       return saved ? JSON.parse(saved) : RECORDINGS_DATA;
@@ -356,20 +382,22 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             setIsAuthenticated(false);
           }
 
-          // Fetch real channels, posts, prompts, events, recordings
-          const [chRes, pRes, prRes, evRes, recRes] = await Promise.all([
+          // Fetch real channels, posts, prompts, events, recordings, and registered members
+          const [chRes, pRes, prRes, evRes, recRes, membersRes] = await Promise.all([
             communityService.fetchChannels(),
             communityService.fetchPosts(),
             promptsService.fetchPrompts(),
             eventsService.fetchEvents(currentUser.id),
             recordingsService.fetchRecordings(),
+            supabase.from('profiles').select('*').order('created_at', { ascending: false }),
           ]);
 
-          if (chRes.channels.length > 0) setChannels(chRes.channels);
-          if (pRes.posts.length > 0) setPosts(pRes.posts);
-          if (prRes.prompts.length > 0) setDailyPrompts(prRes.prompts);
-          if (evRes.events.length > 0) setEvents(evRes.events);
-          if (recRes.recordings.length > 0) setRecordings(recRes.recordings);
+          if (chRes.channels) setChannels(chRes.channels);
+          if (pRes.posts) setPosts(pRes.posts);
+          if (prRes.prompts && prRes.prompts.length > 0) setDailyPrompts(prRes.prompts);
+          if (evRes.events) setEvents(evRes.events);
+          if (recRes.recordings) setRecordings(recRes.recordings);
+          if (membersRes.data) setMembers(membersRes.data as Profile[]);
 
           // Fetch real private journal sessions for user
           if (currentUser.id) {
