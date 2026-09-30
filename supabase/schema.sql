@@ -534,6 +534,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- 1. Insert Profile
   INSERT INTO public.profiles (
     id, 
     name, 
@@ -553,16 +554,33 @@ BEGIN
     'TRIAL',
     1,
     false
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = COALESCE(EXCLUDED.name, public.profiles.name),
+    email = EXCLUDED.email;
 
-  INSERT INTO public.user_preferences (user_id)
-  VALUES (NEW.id)
-  ON CONFLICT (user_id) DO NOTHING;
+  -- 2. Insert User Preferences
+  BEGIN
+    INSERT INTO public.user_preferences (user_id)
+    VALUES (NEW.id)
+    ON CONFLICT (user_id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 
-  -- Create trial membership record
-  INSERT INTO public.memberships (user_id, plan_id, status, started_at, expires_at)
-  VALUES (NEW.id, 'trial', 'TRIAL', NOW(), NOW() + INTERVAL '7 days')
-  ON CONFLICT (user_id) DO NOTHING;
+  -- 3. Create trial membership record safely
+  BEGIN
+    -- Ensure trial plan exists
+    INSERT INTO public.pricing_plans (id, name, description, price_monthly, is_active)
+    VALUES ('trial', 'Prueba de 7 Días', 'Acceso de prueba guiada', 0.00, true)
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.memberships (user_id, plan_id, status, started_at, expires_at)
+    VALUES (NEW.id, 'trial', 'TRIAL', NOW(), NOW() + INTERVAL '7 days')
+    ON CONFLICT (user_id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 
   RETURN NEW;
 END;
