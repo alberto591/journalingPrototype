@@ -27,6 +27,7 @@ interface TrialDay {
   title: string;
   theme: string;
   durationMinutes: number;
+  exerciseSeconds: number;
   description: string;
   promptQuestion: string;
   actionGuidance: string;
@@ -39,6 +40,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 1: Frenar',
     theme: 'Detener la inercia del piloto automático',
     durationMinutes: 5,
+    exerciseSeconds: 120, // 2 minutos
     description: 'Aprende a pausar la aceleración del sistema nervioso con respiración diafragmática 4-4-4-4 antes de mirar cualquier pantalla.',
     promptQuestion: '¿Qué pensamiento no solicitado ha estado persiguiéndote desde que te levantaste hoy?',
     actionGuidance: 'Permanece en silencio durante 2 minutos observando el ritmo de tu respiración sin juzgar lo que surge.',
@@ -49,6 +51,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 2: Limpiar el Ruido',
     theme: 'Vaciado mental sin filtros',
     durationMinutes: 7,
+    exerciseSeconds: 180, // 3 minutos
     description: 'Escribe a mano o en el teclado todo lo que te preocupa, sin preocuparte por la gramática ni la elegancia.',
     promptQuestion: '¿Qué distracción externa estás usando deliberadamente para no quedarte a solas con tus pensamientos?',
     actionGuidance: 'Vuelca en el campo de texto durante 3 minutos todo lo que satura tu atención en este instante.',
@@ -59,6 +62,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 3: Sentir',
     theme: 'Nombrar la realidad emocional con precisión',
     durationMinutes: 10,
+    exerciseSeconds: 120, // 2 minutos
     description: 'Lo que no nombras te gobierna. Localiza cuál de las 8 emociones básicas está presente en tu cuerpo.',
     promptQuestion: '¿Cuál es la emoción predominante que llevas en el pecho o en el estómago mientras respiras ahora?',
     actionGuidance: 'Elige una sola emoción (Dolor, Soledad, Tristeza, Ira, Miedo, Vergüenza, Culpa o Alegría) y conéctala a un hecho concreto.',
@@ -69,6 +73,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 4: Escuchar',
     theme: 'El arte de la quietud receptiva',
     durationMinutes: 10,
+    exerciseSeconds: 300, // 5 minutos exactos de silencio profundo congruentes con la guía y la pregunta
     description: 'Silencia la necesidad de resolverlo todo. Abre un espacio para escuchar la verdad sutil en oración o quietud.',
     promptQuestion: 'Si dejas de defender tu punto de vista durante cinco minutos, ¿qué verdad empieza a revelarse?',
     actionGuidance: 'Guarda silencio profundo sin consultar notas ni teléfono durante los próximos 5 minutos.',
@@ -79,6 +84,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 5: Actuar',
     theme: 'Una sola acción obligatoria',
     durationMinutes: 10,
+    exerciseSeconds: 120, // 2 minutos
     description: 'La dispersión destruye el foco. Transforma la claridad de hoy en un único compromiso ineludible con hora fijada.',
     promptQuestion: '¿Cuál es la única acción que si la terminas hoy hará que todo lo demás sea más fácil?',
     actionGuidance: 'Redacta tu compromiso con formato: "Hoy a las [HORA] haré [ACCIÓN EXACTA]".',
@@ -89,6 +95,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 6: Visión',
     theme: 'Discernir la vida que estás llamado a forjar',
     durationMinutes: 12,
+    exerciseSeconds: 180, // 3 minutos
     description: 'Mira más allá de las urgencias de la semana. ¿Qué orden y propósito quieres que gobiernen tu próximo año?',
     promptQuestion: '¿Qué aspecto de tu vocación estás tolerando que sabes en el fondo que debes cambiar?',
     actionGuidance: 'Visualiza un día ordinario dentro de dos años viviendo con sobriedad y escribe sus 3 rasgos fundamentales.',
@@ -99,6 +106,7 @@ const TRIAL_DAYS: TrialDay[] = [
     title: 'Día 7: Integración',
     theme: 'Consolidación de tu hábito diario',
     durationMinutes: 15,
+    exerciseSeconds: 300, // 5 minutos
     description: 'Has experimentado los 5 Movimientos durante una semana. Este es tu nuevo estándar de vida personal.',
     promptQuestion: '¿Qué ha cambiado en tu nivel de serenidad y claridad al comenzar cada día en silencio?',
     actionGuidance: 'Revisa tus compromisos de la semana y decide si estás listo para sostener esta práctica junto a la comunidad.',
@@ -125,7 +133,7 @@ export const FreeTrialPage: React.FC = () => {
   const [reflections, setReflections] = useState<Record<number, string>>({});
   const [reflectionText, setReflectionText] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [timerSeconds, setTimerSeconds] = useState<number>(120);
+  const [timerSeconds, setTimerSeconds] = useState<number>(() => TRIAL_DAYS[0].exerciseSeconds || 120);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -172,6 +180,7 @@ export const FreeTrialPage: React.FC = () => {
           setCompletedDays(comp);
           const day = data.activeDay || 1;
           setActiveDay(day);
+          setTimerSeconds(TRIAL_DAYS[day - 1]?.exerciseSeconds || 120);
           const savedRefs: Record<number, string> = data.reflections || {};
           setReflections(savedRefs);
           setReflectionText(savedRefs[day] || '');
@@ -258,7 +267,7 @@ export const FreeTrialPage: React.FC = () => {
 
     setActiveDay(dayNum);
     setReflectionText(updated[dayNum] || '');
-    setTimerSeconds(120);
+    setTimerSeconds(TRIAL_DAYS[dayNum - 1]?.exerciseSeconds || 120);
     setTimerRunning(false);
     setSaveStatus('idle');
   };
@@ -311,7 +320,7 @@ export const FreeTrialPage: React.FC = () => {
     const nextDay = activeDay < 7 ? activeDay + 1 : 7;
     setActiveDay(nextDay);
     setReflectionText(updatedReflections[nextDay] || '');
-    setTimerSeconds(120);
+    setTimerSeconds(TRIAL_DAYS[nextDay - 1]?.exerciseSeconds || 120);
     setTimerRunning(false);
     setSaveStatus('saved');
 
@@ -516,7 +525,7 @@ export const FreeTrialPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setTimerRunning(false);
-                      setTimerSeconds(120);
+                      setTimerSeconds(currentTrial.exerciseSeconds || 120);
                     }}
                     className="p-2 text-stone-400 hover:text-stone-700 rounded-lg"
                     title="Reiniciar"

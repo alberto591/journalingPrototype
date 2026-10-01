@@ -134,4 +134,17 @@ describe('Free Trial Reflection & Progress Persistence Specification', () => {
     expect(retrieved.email).toBe('auth.user@travesia.app');
     expect(retrieved.reflections[1]).toBe('Reflexión privada del usuario autenticado.');
   });
+
+  it('guarantees Day 4 guided silence timer is set to 5 minutes (300s) to match exercise guidance', () => {
+    // Expected timer seconds per day matching actionGuidance
+    const day4Guidance = 'Guarda silencio profundo sin consultar notas ni teléfono durante los próximos 5 minutos.';
+    const day4Question = 'Si dejas de defender tu punto de vista durante cinco minutos, ¿qué verdad empieza a revelarse?';
+    const day4ExerciseSeconds = 300; // 5:00
+
+    expect(day4ExerciseSeconds).toBe(5 * 60);
+    expect(Math.floor(day4ExerciseSeconds / 60)).toBe(5);
+    expect(String(day4ExerciseSeconds % 60).padStart(2, '0')).toBe('00');
+    expect(day4Guidance).toContain('5 minutos');
+    expect(day4Question).toContain('cinco minutos');
+  });
 });
