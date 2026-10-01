@@ -106,14 +106,19 @@ export const gdprService = {
     }
 
     try {
-      // Deleting user profile cascades to sessions, drafts, comments, etc.
-      const { error: deleteErr } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
+      // 1. Invoke dedicated SECURITY DEFINER RPC to delete from auth.users (cascades cleanly)
+      const { error: rpcErr } = await supabase.rpc('delete_user_account');
 
-      if (deleteErr) {
-        return { success: false, error: deleteErr.message };
+      if (rpcErr) {
+        // Fallback: Delete user profile directly (which cascades to sessions, drafts, comments, etc.)
+        const { error: deleteErr } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+
+        if (deleteErr) {
+          return { success: false, error: deleteErr.message };
+        }
       }
 
       // Sign out current session

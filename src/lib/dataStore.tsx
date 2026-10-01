@@ -392,7 +392,7 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             promptsService.fetchPrompts(),
             eventsService.fetchEvents(currentUser.id),
             recordingsService.fetchRecordings(),
-            supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+            supabase.from('profiles').select('id, name, avatar_url, role, bio, location, focus_areas, streak_days, completed_sessions_count, reflection_minutes, current_week, onboarding_completed, created_at').order('created_at', { ascending: false }),
           ]);
 
           if (chRes.channels) setChannels(chRes.channels);

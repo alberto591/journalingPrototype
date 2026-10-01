@@ -105,10 +105,11 @@ export const businessService = {
     }
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', params.userId);
+      const { error } = await supabase.rpc('admin_activate_membership', {
+        target_user_id: params.userId,
+        new_status: params.status || 'ACTIVE',
+        duration_days: params.durationDays || 30,
+      });
 
       if (error) {
         return { success: false, error: error.message };

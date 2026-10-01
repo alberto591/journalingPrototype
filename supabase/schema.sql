@@ -519,20 +519,29 @@ CREATE TABLE IF NOT EXISTS public.business_settings (
 -- ====================================================================
 
 CREATE OR REPLACE FUNCTION public.is_admin(user_uid UUID)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
+  IF user_uid IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
   RETURN EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = user_uid AND role = 'admin'
-  ) OR EXISTS (
     SELECT 1 FROM public.admin_roles 
     WHERE user_id = user_uid
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   -- 1. Insert Profile
   INSERT INTO public.profiles (
@@ -584,7 +593,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -668,28 +677,429 @@ CREATE TABLE IF NOT EXISTS public.cycle_reflections (
   completed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE public.ongoing_cycles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cycle_reflections ENABLE ROW LEVEL SECURITY;
+-- ====================================================================
+-- CANONICAL SECURITY TRIGGERS & PROCEDURES (P0 / P1 / P2)
+-- ====================================================================
 
-DROP POLICY IF EXISTS "Ongoing cycles viewable by everyone" ON public.ongoing_cycles;
-CREATE POLICY "Ongoing cycles viewable by everyone"
-  ON public.ongoing_cycles FOR SELECT
-  USING (true);
+-- Trigger for Profile Privileged Column Protection (P0 Anti-Tamper)
+CREATE OR REPLACE FUNCTION public.protect_profile_privileged_columns()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_is_caller_admin BOOLEAN;
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RETURN NEW;
+  END IF;
 
-DROP POLICY IF EXISTS "Admins manage ongoing cycles" ON public.ongoing_cycles;
-CREATE POLICY "Admins manage ongoing cycles"
-  ON public.ongoing_cycles FOR ALL
-  USING (auth.jwt()->>'role' = 'admin' OR EXISTS (
-    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-  ));
+  v_is_caller_admin := public.is_admin(v_caller_id);
 
-DROP POLICY IF EXISTS "Users can view own reflections" ON public.cycle_reflections;
-CREATE POLICY "Users can view own reflections"
-  ON public.cycle_reflections FOR SELECT
+  IF NOT v_is_caller_admin THEN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Privilege Violation: Only administrators can modify roles.';
+    END IF;
+
+    IF NEW.membership_status IS DISTINCT FROM OLD.membership_status THEN
+      RAISE EXCEPTION 'Privilege Violation: Only administrators can modify membership status.';
+    END IF;
+
+    IF NEW.streak_days IS DISTINCT FROM OLD.streak_days THEN
+      RAISE EXCEPTION 'Privilege Violation: streak_days is managed server-side and cannot be manually modified.';
+    END IF;
+
+    IF NEW.billing_started_at IS DISTINCT FROM OLD.billing_started_at THEN
+      RAISE EXCEPTION 'Privilege Violation: billing_started_at cannot be modified by member.';
+    END IF;
+
+    IF NEW.next_billing_date IS DISTINCT FROM OLD.next_billing_date THEN
+      RAISE EXCEPTION 'Privilege Violation: next_billing_date cannot be modified by member.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_privileged_columns ON public.profiles;
+CREATE TRIGGER trg_protect_profile_privileged_columns
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.protect_profile_privileged_columns();
+
+-- Administrative Membership Activation RPC (P1)
+CREATE OR REPLACE FUNCTION public.admin_activate_membership(
+  target_user_id UUID,
+  new_status TEXT DEFAULT 'ACTIVE',
+  duration_days INTEGER DEFAULT 30
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_now TIMESTAMPTZ := NOW();
+  v_ends_at TIMESTAMPTZ := NOW() + (duration_days || ' days')::INTERVAL;
+BEGIN
+  IF NOT public.is_admin(v_caller_id) THEN
+    RAISE EXCEPTION 'Access Denied: Only administrators can activate or modify member subscriptions.';
+  END IF;
+
+  IF new_status NOT IN ('TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED') THEN
+    RAISE EXCEPTION 'Invalid status: %', new_status;
+  END IF;
+
+  UPDATE public.profiles
+  SET 
+    membership_status = new_status,
+    billing_started_at = v_now,
+    next_billing_date = v_ends_at,
+    updated_at = v_now
+  WHERE id = target_user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found: %', target_user_id;
+  END IF;
+
+  INSERT INTO public.memberships (user_id, plan_id, status, started_at, expires_at, current_period_start, current_period_end)
+  VALUES (target_user_id, 'founding', new_status, v_now, v_ends_at, v_now, v_ends_at)
+  ON CONFLICT (user_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    started_at = EXCLUDED.started_at,
+    expires_at = EXCLUDED.expires_at,
+    current_period_start = EXCLUDED.current_period_start,
+    current_period_end = EXCLUDED.current_period_end,
+    updated_at = v_now;
+
+  INSERT INTO public.membership_events (user_id, event_type, metadata)
+  VALUES (
+    target_user_id,
+    'ADMIN_MANUAL_ACTIVATION',
+    jsonb_build_object(
+      'activated_by', v_caller_id,
+      'status', new_status,
+      'duration_days', duration_days,
+      'ends_at', v_ends_at
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'user_id', target_user_id,
+    'status', new_status,
+    'expires_at', v_ends_at
+  );
+END;
+$$;
+
+-- GDPR Account Deletion RPC (P2)
+CREATE OR REPLACE FUNCTION public.delete_user_account()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Access Denied: You must be logged in to delete your account.';
+  END IF;
+
+  DELETE FROM auth.users WHERE id = v_caller_id;
+
+  RETURN jsonb_build_object('success', true, 'deleted_user_id', v_caller_id);
+END;
+$$;
+
+-- PII Email Secure Reader
+CREATE OR REPLACE FUNCTION public.get_profile_email(target_user_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+AS $$
+BEGIN
+  IF auth.uid() = target_user_id OR public.is_admin(auth.uid()) THEN
+    RETURN (SELECT email FROM auth.users WHERE id = target_user_id);
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+-- ====================================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES — CONSOLIDATED CANONICAL POLICIES
+-- ====================================================================
+
+-- 1. Profiles Policies
+DROP POLICY IF EXISTS "Public profiles viewable by authenticated users" ON public.profiles;
+CREATE POLICY "Public profiles viewable by authenticated users"
+  ON public.profiles FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Admins can update any profile" ON public.profiles;
+CREATE POLICY "Admins can update any profile"
+  ON public.profiles FOR UPDATE
+  USING (public.is_admin(auth.uid()))
+  WITH CHECK (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users can delete own profile" ON public.profiles;
+CREATE POLICY "Users can delete own profile"
+  ON public.profiles FOR DELETE
+  USING (auth.uid() = id OR public.is_admin(auth.uid()));
+
+-- 2. Strict Journal Privacy (RLS user isolation)
+DROP POLICY IF EXISTS "Users can view own journal sessions" ON public.journal_sessions;
+CREATE POLICY "Users can view own journal sessions"
+  ON public.journal_sessions FOR SELECT
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can insert own reflections" ON public.cycle_reflections;
-CREATE POLICY "Users can insert own reflections"
-  ON public.cycle_reflections FOR INSERT
+DROP POLICY IF EXISTS "Users can insert own journal sessions" ON public.journal_sessions;
+CREATE POLICY "Users can insert own journal sessions"
+  ON public.journal_sessions FOR INSERT
   WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own journal sessions" ON public.journal_sessions;
+CREATE POLICY "Users can update own journal sessions"
+  ON public.journal_sessions FOR UPDATE
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own journal sessions" ON public.journal_sessions;
+CREATE POLICY "Users can delete own journal sessions"
+  ON public.journal_sessions FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Journal Drafts, Entries, Emotions & Commitments
+DROP POLICY IF EXISTS "Users can view own journal entries" ON public.journal_entries;
+CREATE POLICY "Users can view own journal entries" ON public.journal_entries FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own journal entries" ON public.journal_entries;
+CREATE POLICY "Users can insert own journal entries" ON public.journal_entries FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own journal entries" ON public.journal_entries;
+CREATE POLICY "Users can update own journal entries" ON public.journal_entries FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own journal entries" ON public.journal_entries;
+CREATE POLICY "Users can delete own journal entries" ON public.journal_entries FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view own emotions" ON public.user_emotions;
+CREATE POLICY "Users can view own emotions" ON public.user_emotions FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own emotions" ON public.user_emotions;
+CREATE POLICY "Users can insert own emotions" ON public.user_emotions FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own emotions" ON public.user_emotions;
+CREATE POLICY "Users can update own emotions" ON public.user_emotions FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own emotions" ON public.user_emotions;
+CREATE POLICY "Users can delete own emotions" ON public.user_emotions FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view own commitments" ON public.action_commitments;
+CREATE POLICY "Users can view own commitments" ON public.action_commitments FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own commitments" ON public.action_commitments;
+CREATE POLICY "Users can insert own commitments" ON public.action_commitments FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own commitments" ON public.action_commitments;
+CREATE POLICY "Users can update own commitments" ON public.action_commitments FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own commitments" ON public.action_commitments;
+CREATE POLICY "Users can delete own commitments" ON public.action_commitments FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users manage own journal drafts" ON public.journal_drafts;
+CREATE POLICY "Users manage own journal drafts" ON public.journal_drafts FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users manage own notifications" ON public.notifications;
+CREATE POLICY "Users manage own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users manage own preferences" ON public.user_preferences;
+CREATE POLICY "Users manage own preferences" ON public.user_preferences FOR ALL USING (auth.uid() = user_id);
+
+-- 3. Memberships & Pricing
+DROP POLICY IF EXISTS "Pricing plans viewable by everyone" ON public.pricing_plans;
+CREATE POLICY "Pricing plans viewable by everyone" ON public.pricing_plans FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins manage pricing plans" ON public.pricing_plans;
+CREATE POLICY "Admins manage pricing plans" ON public.pricing_plans FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users view own membership" ON public.memberships;
+CREATE POLICY "Users view own membership" ON public.memberships FOR SELECT USING (auth.uid() = user_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Admins manage memberships" ON public.memberships;
+CREATE POLICY "Admins manage memberships" ON public.memberships FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users view own membership events" ON public.membership_events;
+CREATE POLICY "Users view own membership events" ON public.membership_events FOR SELECT USING (auth.uid() = user_id OR public.is_admin(auth.uid()));
+
+-- 4. Session Recordings (Membership Gated)
+DROP POLICY IF EXISTS "Recordings viewable by active members and admins" ON public.session_recordings;
+CREATE POLICY "Recordings viewable by active members and admins"
+  ON public.session_recordings FOR SELECT
+  USING (
+    auth.role() = 'authenticated' 
+    AND (
+      public.is_admin(auth.uid()) 
+      OR EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() 
+        AND membership_status IN ('ACTIVE', 'TRIAL')
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins manage session recordings" ON public.session_recordings;
+CREATE POLICY "Admins manage session recordings" ON public.session_recordings FOR ALL USING (public.is_admin(auth.uid()));
+
+-- 5. Events & Attendance
+DROP POLICY IF EXISTS "Events viewable by authenticated users" ON public.events;
+CREATE POLICY "Events viewable by authenticated users" ON public.events FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Admins manage events" ON public.events;
+CREATE POLICY "Admins manage events" ON public.events FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users manage own event registration" ON public.event_attendees;
+CREATE POLICY "Users manage own event registration" ON public.event_attendees FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins view all event attendees" ON public.event_attendees;
+CREATE POLICY "Admins view all event attendees" ON public.event_attendees FOR SELECT USING (public.is_admin(auth.uid()));
+
+-- 6. Community, Channels, Posts & Comments
+DROP POLICY IF EXISTS "Communities viewable by authenticated" ON public.communities;
+CREATE POLICY "Communities viewable by authenticated" ON public.communities FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Community members viewable by authenticated" ON public.community_members;
+CREATE POLICY "Community members viewable by authenticated" ON public.community_members FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users manage own community membership" ON public.community_members;
+CREATE POLICY "Users manage own community membership" ON public.community_members FOR ALL USING (auth.uid() = user_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Channels viewable by authenticated" ON public.channels;
+CREATE POLICY "Channels viewable by authenticated" ON public.channels FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins manage channels" ON public.channels;
+CREATE POLICY "Admins manage channels" ON public.channels FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Posts viewable by authenticated" ON public.posts;
+CREATE POLICY "Posts viewable by authenticated" ON public.posts FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users insert own posts" ON public.posts;
+CREATE POLICY "Users insert own posts" ON public.posts FOR INSERT WITH CHECK (auth.uid() = author_id);
+
+DROP POLICY IF EXISTS "Users and admins manage posts" ON public.posts;
+CREATE POLICY "Users and admins manage posts" ON public.posts FOR UPDATE USING (auth.uid() = author_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users and admins delete posts" ON public.posts;
+CREATE POLICY "Users and admins delete posts" ON public.posts FOR DELETE USING (auth.uid() = author_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Comments viewable by authenticated" ON public.comments;
+CREATE POLICY "Comments viewable by authenticated" ON public.comments FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users insert own comments" ON public.comments;
+CREATE POLICY "Users insert own comments" ON public.comments FOR INSERT WITH CHECK (auth.uid() = author_id);
+
+DROP POLICY IF EXISTS "Users and admins delete comments" ON public.comments;
+CREATE POLICY "Users and admins delete comments" ON public.comments FOR DELETE USING (auth.uid() = author_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Reactions manageable by own user" ON public.post_reactions;
+CREATE POLICY "Reactions manageable by own user" ON public.post_reactions FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Bookmarks manageable by own user" ON public.bookmarks;
+CREATE POLICY "Bookmarks manageable by own user" ON public.bookmarks FOR ALL USING (auth.uid() = user_id);
+
+-- 7. Lessons, Catalogs & Prompts
+DROP POLICY IF EXISTS "Lesson sections viewable by authenticated" ON public.lesson_sections;
+CREATE POLICY "Lesson sections viewable by authenticated" ON public.lesson_sections FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Admins manage lesson sections" ON public.lesson_sections;
+CREATE POLICY "Admins manage lesson sections" ON public.lesson_sections FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Lessons viewable by authenticated" ON public.lessons;
+CREATE POLICY "Lessons viewable by authenticated" ON public.lessons FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Lesson progress manageable by own user" ON public.lesson_progress;
+CREATE POLICY "Lesson progress manageable by own user" ON public.lesson_progress FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Emotions catalog viewable by authenticated" ON public.emotions;
+CREATE POLICY "Emotions catalog viewable by authenticated" ON public.emotions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins manage emotions catalog" ON public.emotions;
+CREATE POLICY "Admins manage emotions catalog" ON public.emotions FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Daily prompts viewable by authenticated" ON public.daily_prompts;
+CREATE POLICY "Daily prompts viewable by authenticated" ON public.daily_prompts FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Four week cycles viewable by authenticated" ON public.four_week_cycles;
+CREATE POLICY "Four week cycles viewable by authenticated" ON public.four_week_cycles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Cycle progress manageable by own user" ON public.cycle_progress;
+CREATE POLICY "Cycle progress manageable by own user" ON public.cycle_progress FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Ongoing cycles viewable by everyone" ON public.ongoing_cycles;
+CREATE POLICY "Ongoing cycles viewable by everyone" ON public.ongoing_cycles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins manage ongoing cycles" ON public.ongoing_cycles;
+CREATE POLICY "Admins manage ongoing cycles" ON public.ongoing_cycles FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users can view own reflections" ON public.cycle_reflections;
+CREATE POLICY "Users can view own reflections" ON public.cycle_reflections FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own reflections" ON public.cycle_reflections;
+CREATE POLICY "Users can insert own reflections" ON public.cycle_reflections FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Books viewable by authenticated" ON public.books;
+CREATE POLICY "Books viewable by authenticated" ON public.books FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Resources viewable by authenticated" ON public.resources;
+CREATE POLICY "Resources viewable by authenticated" ON public.resources FOR SELECT USING (auth.role() = 'authenticated');
+
+-- 8. Business, Growth & Administration
+DROP POLICY IF EXISTS "Leads insertable by public" ON public.leads;
+CREATE POLICY "Leads insertable by public" ON public.leads FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Leads viewable and manageable by admins" ON public.leads;
+CREATE POLICY "Leads viewable and manageable by admins" ON public.leads FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Referrals readable by referrer or admin" ON public.referrals;
+CREATE POLICY "Referrals readable by referrer or admin" ON public.referrals FOR SELECT USING (auth.uid() = referrer_user_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Referrals insertable by authenticated" ON public.referrals;
+CREATE POLICY "Referrals insertable by authenticated" ON public.referrals FOR INSERT WITH CHECK (auth.uid() = referrer_user_id);
+
+DROP POLICY IF EXISTS "Daily challenge manageable by own user" ON public.daily_challenge_progress;
+CREATE POLICY "Daily challenge manageable by own user" ON public.daily_challenge_progress FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Customer interviews manageable by admins" ON public.customer_interviews;
+CREATE POLICY "Customer interviews manageable by admins" ON public.customer_interviews FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Feedback insertable by own user" ON public.feedback_responses;
+CREATE POLICY "Feedback insertable by own user" ON public.feedback_responses FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Feedback viewable by own user and admins" ON public.feedback_responses;
+CREATE POLICY "Feedback viewable by own user and admins" ON public.feedback_responses FOR SELECT USING (auth.uid() = user_id OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Content items manageable by admins" ON public.content_items;
+CREATE POLICY "Content items manageable by admins" ON public.content_items FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Analytics insertable by anyone" ON public.analytics_events;
+CREATE POLICY "Analytics insertable by anyone" ON public.analytics_events FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Analytics viewable by admins" ON public.analytics_events;
+CREATE POLICY "Analytics viewable by admins" ON public.analytics_events FOR SELECT USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Users can insert own email events" ON public.email_events;
+CREATE POLICY "Users can insert own email events" ON public.email_events FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL OR public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Email events viewable by admins" ON public.email_events;
+CREATE POLICY "Email events viewable by admins" ON public.email_events FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Business settings readable by all" ON public.business_settings;
+CREATE POLICY "Business settings readable by all" ON public.business_settings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Business settings manageable by admins" ON public.business_settings;
+CREATE POLICY "Business settings manageable by admins" ON public.business_settings FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Admin roles manageable by superadmin" ON public.admin_roles;
+CREATE POLICY "Admin roles manageable by superadmin" ON public.admin_roles FOR ALL USING (public.is_admin(auth.uid()));
+
 

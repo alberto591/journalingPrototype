@@ -37,7 +37,7 @@ export const communityService = {
         .from('posts')
         .select(`
           *,
-          author:profiles(*)
+          author:profiles(id, name, avatar_url, role)
         `)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
@@ -81,7 +81,7 @@ export const communityService = {
           likes_count: 0,
           comments_count: 0,
         })
-        .select(`*, author:profiles(*)`)
+        .select(`*, author:profiles(id, name, avatar_url, role)`)
         .single();
 
       if (error) {
@@ -159,7 +159,7 @@ export const communityService = {
     try {
       const { data, error } = await supabase
         .from('comments')
-        .select(`*, author:profiles(*)`)
+        .select(`*, author:profiles(id, name, avatar_url, role)`)
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -192,7 +192,7 @@ export const communityService = {
           content: content.trim(),
           likes_count: 0,
         })
-        .select(`*, author:profiles(*)`)
+        .select(`*, author:profiles(id, name, avatar_url, role)`)
         .single();
 
       if (error) {

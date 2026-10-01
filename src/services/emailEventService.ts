@@ -36,7 +36,7 @@ export const emailEventService = {
     }
 
     try {
-      await supabase.from('email_event_logs').insert({
+      await supabase.from('email_events').insert({
         user_id: params.userId,
         user_email: params.userEmail,
         event_type: params.eventType,
@@ -61,13 +61,16 @@ export const emailEventService = {
 
     try {
       const { data, error } = await supabase
-        .from('email_event_logs')
+        .from('email_events')
         .select('*')
-        .order('dispatched_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(50);
 
       if (error || !data) return [];
-      return data as EmailEventLog[];
+      return data.map((d: any) => ({
+        ...d,
+        dispatched_at: d.created_at || d.sent_at || new Date().toISOString(),
+      })) as EmailEventLog[];
     } catch {
       return [];
     }
