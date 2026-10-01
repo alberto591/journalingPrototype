@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
@@ -11,8 +11,12 @@ import {
   Calendar, 
   Flame, 
   RotateCcw,
-  Volume2
+  Volume2,
+  Check,
+  Save,
+  Loader2
 } from 'lucide-react';
+import { useDataStore } from '../lib/dataStore';
 import { leadService } from '../services/leadService';
 import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
@@ -106,6 +110,7 @@ const TRIAL_STORAGE_KEY = 'travesia_trial_progress_v3';
 
 export const FreeTrialPage: React.FC = () => {
   const navigate = useNavigate();
+  const { currentUser } = useDataStore();
 
   // Registration step
   const [leadCaptured, setLeadCaptured] = useState<boolean>(false);
@@ -117,31 +122,80 @@ export const FreeTrialPage: React.FC = () => {
   // Active trial state
   const [activeDay, setActiveDay] = useState<number>(1);
   const [completedDays, setCompletedDays] = useState<number[]>([]);
+  const [reflections, setReflections] = useState<Record<number, string>>({});
   const [reflectionText, setReflectionText] = useState<string>('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [timerSeconds, setTimerSeconds] = useState<number>(120);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
+
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Helper to persist trial progress and reflections to storage
+  const saveToStorage = (
+    updatedReflections: Record<number, string>,
+    updatedCompleted: number[],
+    currentDay: number,
+    completedTrial: boolean = false
+  ) => {
+    try {
+      const payload = {
+        email: email || currentUser?.email || '',
+        name: name || currentUser?.name || '',
+        completedDays: updatedCompleted,
+        activeDay: currentDay,
+        completedTrial,
+        reflections: updatedReflections,
+        lastSavedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(payload));
+      if (currentUser?.id) {
+        localStorage.setItem(`${TRIAL_STORAGE_KEY}_${currentUser.id}`, JSON.stringify(payload));
+      }
+    } catch (err) {
+      console.error('Error saving trial progress:', err);
+    }
+  };
 
   // Load saved trial progress
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(TRIAL_STORAGE_KEY);
+      const userKey = currentUser?.id ? `${TRIAL_STORAGE_KEY}_${currentUser.id}` : null;
+      const stored = (userKey && localStorage.getItem(userKey)) || localStorage.getItem(TRIAL_STORAGE_KEY);
+      
       if (stored) {
         const data = JSON.parse(stored);
-        if (data.email) {
-          setEmail(data.email);
-          setName(data.name || '');
+        if (data.email || currentUser?.email) {
+          setEmail(data.email || currentUser?.email || '');
+          setName(data.name || currentUser?.name || '');
           setLeadCaptured(true);
-          setCompletedDays(data.completedDays || []);
-          setActiveDay(data.activeDay || 1);
+          const comp = data.completedDays || [];
+          setCompletedDays(comp);
+          const day = data.activeDay || 1;
+          setActiveDay(day);
+          const savedRefs: Record<number, string> = data.reflections || {};
+          setReflections(savedRefs);
+          setReflectionText(savedRefs[day] || '');
         }
+      } else if (currentUser?.email) {
+        setEmail(currentUser.email);
+        setName(currentUser.name || '');
       }
-    } catch {}
+    } catch (err) {
+      console.error('Error reading trial progress:', err);
+    }
 
     // Check for referral code
     const refCode = referralService.getStoredReferralCode();
     if (refCode) {
       setSource('Referral');
     }
+  }, [currentUser]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, []);
 
   // Timer countdown effect
@@ -156,6 +210,58 @@ export const FreeTrialPage: React.FC = () => {
     }
     return () => clearInterval(interval);
   }, [timerRunning, timerSeconds]);
+
+  // Handle reflection text change with auto-save
+  const handleReflectionChange = (val: string) => {
+    setReflectionText(val);
+    const updated = {
+      ...reflections,
+      [activeDay]: val,
+    };
+    setReflections(updated);
+    setSaveStatus('saving');
+
+    // Persist immediately to prevent data loss on sudden browser close/reload
+    saveToStorage(updated, completedDays, activeDay, completedDays.includes(7));
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      setSaveStatus('saved');
+    }, 600);
+  };
+
+  // Explicit manual save action
+  const handleExplicitSave = () => {
+    const updated = {
+      ...reflections,
+      [activeDay]: reflectionText,
+    };
+    setReflections(updated);
+    saveToStorage(updated, completedDays, activeDay, completedDays.includes(7));
+    setSaveStatus('saved');
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      setSaveStatus('idle');
+    }, 3000);
+  };
+
+  // Switch between days safely preserving reflection text for both
+  const handleSelectDay = (dayNum: number) => {
+    if (dayNum === activeDay) return;
+
+    const updated = {
+      ...reflections,
+      [activeDay]: reflectionText,
+    };
+    setReflections(updated);
+    saveToStorage(updated, completedDays, dayNum, completedDays.includes(7));
+
+    setActiveDay(dayNum);
+    setReflectionText(updated[dayNum] || '');
+    setTimerSeconds(120);
+    setTimerRunning(false);
+    setSaveStatus('idle');
+  };
 
   // Handle lead submission
   const handleStartTrial = async (e: React.FormEvent) => {
@@ -172,52 +278,44 @@ export const FreeTrialPage: React.FC = () => {
     await leadService.markTrialStarted(email);
     await analyticsService.track('trial_started', { email, source });
 
-    const initialProgress = {
-      email,
-      name,
-      completedDays: [],
-      activeDay: 1,
-      startedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(initialProgress));
+    const initialRefs = {};
+    saveToStorage(initialRefs, [], 1, false);
 
     setIsLoading(false);
     setLeadCaptured(true);
   };
 
-  // Complete current day
+  // Complete current day or mark reviewed
   const handleCompleteCurrentDay = async () => {
+    const updatedReflections = {
+      ...reflections,
+      [activeDay]: reflectionText,
+    };
+    setReflections(updatedReflections);
+
     const updatedCompleted = Array.from(new Set([...completedDays, activeDay]));
     setCompletedDays(updatedCompleted);
 
     await analyticsService.track('trial_day_completed', {
       email,
       day: activeDay,
+      has_reflection: Boolean(reflectionText.trim()),
+      reflection_chars: reflectionText.trim().length,
     });
 
-    const isLastDay = activeDay === 7;
+    const isLastDay = activeDay === 7 || updatedCompleted.length === 7;
     if (isLastDay) {
       await leadService.markTrialCompleted(email);
     }
 
-    const nextDay = Math.min(7, activeDay + 1);
+    const nextDay = activeDay < 7 ? activeDay + 1 : 7;
     setActiveDay(nextDay);
-    setReflectionText('');
+    setReflectionText(updatedReflections[nextDay] || '');
     setTimerSeconds(120);
     setTimerRunning(false);
+    setSaveStatus('saved');
 
-    try {
-      localStorage.setItem(
-        TRIAL_STORAGE_KEY,
-        JSON.stringify({
-          email,
-          name,
-          completedDays: updatedCompleted,
-          activeDay: nextDay,
-          completedTrial: isLastDay,
-        })
-      );
-    } catch {}
+    saveToStorage(updatedReflections, updatedCompleted, nextDay, isLastDay);
   };
 
   const currentTrial = TRIAL_DAYS[activeDay - 1];
@@ -355,7 +453,7 @@ export const FreeTrialPage: React.FC = () => {
                   return (
                     <button
                       key={day.dayNumber}
-                      onClick={() => setActiveDay(day.dayNumber)}
+                      onClick={() => handleSelectDay(day.dayNumber)}
                       className={`p-2.5 rounded-2xl text-center border transition-all ${
                         isCurrent
                           ? 'bg-stone-900 text-white border-stone-900 shadow-md scale-105'
@@ -430,16 +528,64 @@ export const FreeTrialPage: React.FC = () => {
 
               {/* Reflection question & text area */}
               <div className="space-y-3">
-                <label className="block font-serif font-semibold text-base text-stone-900">
-                  Pregunta de examen: <span className="italic font-normal text-stone-700">{currentTrial.promptQuestion}</span>
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label htmlFor="reflection-textarea" className="block font-serif font-semibold text-base text-stone-900">
+                    Pregunta de examen: <span className="italic font-normal text-stone-700">{currentTrial.promptQuestion}</span>
+                  </label>
+                  
+                  {/* Status Indicator */}
+                  <div className="flex items-center gap-2">
+                    {saveStatus === 'saving' && (
+                      <span className="text-[11px] font-sans text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-xs">
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
+                        <span>Guardando...</span>
+                      </span>
+                    )}
+                    {saveStatus === 'saved' && (
+                      <span className="text-[11px] font-sans text-emerald-800 bg-emerald-50 border border-emerald-200/90 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 font-medium shadow-xs">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Guardado en tu santuario</span>
+                      </span>
+                    )}
+                    {saveStatus === 'idle' && (reflections[activeDay] || reflectionText) && (
+                      <span className="text-[11px] font-sans text-stone-600 bg-sand-100 border border-sand-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Guardado</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
                 <textarea
+                  id="reflection-textarea"
                   rows={4}
                   value={reflectionText}
-                  onChange={e => setReflectionText(e.target.value)}
+                  onChange={e => handleReflectionChange(e.target.value)}
                   placeholder="Escribe tu reflexión con honestidad sin filtros. Nadie leerá este texto..."
-                  className="travesia-input w-full text-xs font-serif leading-relaxed"
+                  className="travesia-input w-full text-xs font-serif leading-relaxed transition-all focus:border-amber-600 focus:ring-1 focus:ring-amber-500"
                 />
+
+                <div className="flex items-center justify-between text-[11px] text-stone-400 px-1 pt-0.5">
+                  <span className="flex items-center gap-1 text-stone-500">
+                    <Lock className="w-3 h-3 text-stone-400" /> Tu respuesta se guarda automáticamente y es 100% privada
+                  </span>
+
+                  <div className="flex items-center gap-3">
+                    {reflectionText.trim().length > 0 && (
+                      <span className="font-mono text-stone-400">
+                        {reflectionText.trim().split(/\s+/).filter(Boolean).length} palabras
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleExplicitSave}
+                      className="text-stone-600 hover:text-stone-900 font-semibold underline underline-offset-2 flex items-center gap-1 transition-colors"
+                      title="Guardar respuesta inmediatamente"
+                    >
+                      <Save className="w-3 h-3 text-stone-500" /> Guardar ahora
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Next-Day Expectation & Completion State */}
