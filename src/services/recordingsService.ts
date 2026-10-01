@@ -209,7 +209,7 @@ export const recordingsService = {
       if (isSupabaseConfigured) {
         onProgress?.(25, 'Subiendo grabación al almacenamiento privado... 25%');
         
-        const { error: uploadError } = await supabase.storage
+        let { error: uploadError } = await supabase.storage
           .from(STORAGE_BUCKET)
           .upload(relativeStoragePath, file, {
             upsert: true,
@@ -217,8 +217,45 @@ export const recordingsService = {
           });
 
         if (uploadError) {
-          onProgress?.(0, 'Error en subida');
-          return { recording: null, error: `Error al subir al bucket de almacenamiento: ${uploadError.message}` };
+          // If bucket does not exist, attempt to auto-create it
+          const isBucketNotFound = 
+            uploadError.message?.toLowerCase().includes('bucket not found') || 
+            (uploadError as any)?.statusCode === 404 || 
+            (uploadError as any)?.statusCode === '404';
+
+          if (isBucketNotFound) {
+            try {
+              const { error: createErr } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+                public: false,
+                fileSizeLimit: 5368709120, // 5GB
+                allowedMimeTypes: ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska'],
+              });
+
+              if (!createErr) {
+                // Retry upload now that bucket exists
+                const retry = await supabase.storage
+                  .from(STORAGE_BUCKET)
+                  .upload(relativeStoragePath, file, {
+                    upsert: true,
+                    contentType: file.type || 'video/mp4',
+                  });
+                uploadError = retry.error;
+              }
+            } catch {
+              // Ignore createBucket client error
+            }
+          }
+
+          if (uploadError) {
+            onProgress?.(0, 'Error en subida');
+            if (uploadError.message?.toLowerCase().includes('bucket not found')) {
+              return { 
+                recording: null, 
+                error: `El bucket de almacenamiento "${STORAGE_BUCKET}" aún no ha sido creado en tu proyecto de Supabase.\n\nPara crearlo en 30 segundos:\n1. Abre tu panel de Supabase → Storage\n2. Pulsa en "New bucket"\n3. Introduce de nombre exacto: session-recordings\n4. Deja la casilla "Public bucket" DESACTIVADA (debe ser privado)\n5. Guarda el bucket y vuelve a pulsar "SUBIR GRABACIÓN".` 
+              };
+            }
+            return { recording: null, error: `Error al subir al bucket de almacenamiento: ${uploadError.message}` };
+          }
         }
 
         onProgress?.(75, 'Grabación subida. Registrando metadatos en Supabase... 75%');
