@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
 import { 
   DailyPrompt, 
@@ -89,7 +90,19 @@ export const AdminDashboard: React.FC = () => {
   } = useDataStore();
 
 
-  const [activeTab, setActiveTab] = useState<'business' | 'cycles' | 'founding_members' | 'product_log' | 'content' | 'prompts' | 'events' | 'settings'>('business');
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const validTabs = ['business', 'cycles', 'founding_members', 'product_log', 'content', 'prompts', 'events', 'settings'];
+  const [activeTab, setActiveTab] = useState<'business' | 'cycles' | 'founding_members' | 'product_log' | 'content' | 'prompts' | 'events' | 'settings'>(
+    requestedTab && validTabs.includes(requestedTab) ? (requestedTab as any) : 'business'
+  );
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
 
   // Business settings state
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_BUSINESS_SETTINGS);

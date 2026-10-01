@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
 import { SessionRecording } from '../../types';
 import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
 import { MembershipAccessGate } from '../modals/MembershipAccessGate';
-import { PlayCircle, Clock, Search } from 'lucide-react';
-
+import { PlayCircle, Clock, Search, Film, Upload, Plus, ArrowRight } from 'lucide-react';
 
 export const ArchiveView: React.FC = () => {
+  const navigate = useNavigate();
   const { recordings, events, currentUser } = useDataStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,9 +78,21 @@ export const ArchiveView: React.FC = () => {
           </p>
         </div>
 
-        <div className="text-right flex-shrink-0">
-          <p className="font-serif font-bold text-3xl text-amber-400">{allRecordings.length}</p>
-          <p className="text-xs text-sand-400">Grabaciones disponibles</p>
+        <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
+          <div className="text-left sm:text-right">
+            <p className="font-serif font-bold text-3xl text-amber-400">{allRecordings.length}</p>
+            <p className="text-xs text-sand-400">Grabaciones disponibles</p>
+          </div>
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => navigate('/admin?tab=events')}
+              className="text-xs font-semibold py-2 px-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 flex items-center gap-1.5 shadow-sm transition-all"
+              title="Ir al panel de administración para subir o gestionar grabaciones"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Subir Grabación MP4</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -114,8 +127,40 @@ export const ArchiveView: React.FC = () => {
         </div>
       </div>
 
-      {/* Recordings Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Recordings Grid / Empty State */}
+      {filteredRecordings.length === 0 ? (
+        <div className="travesia-card p-10 sm:p-14 text-center bg-sand-50/70 border border-dashed border-sand-300 rounded-3xl space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700">
+            <Film className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="font-serif font-bold text-lg text-stone-900">
+              {searchQuery || selectedCategory !== 'Todas' 
+                ? 'No se encontraron grabaciones con esos filtros'
+                : 'Aún no hay grabaciones en la hemeroteca'}
+            </h3>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              {searchQuery || selectedCategory !== 'Todas'
+                ? 'Prueba a cambiar los términos de búsqueda o a seleccionar otra temática.'
+                : 'Las grabaciones de las sesiones matutinas en directo se procesan y publican aquí tras finalizar cada encuentro para que los miembros practiquen a su propio ritmo.'}
+            </p>
+          </div>
+
+          {currentUser?.role === 'admin' && (
+            <div className="pt-2">
+              <button
+                onClick={() => navigate('/admin?tab=events')}
+                className="travesia-btn-primary text-xs py-2.5 px-5 font-bold inline-flex items-center gap-2 shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Gestionar Sesiones y Subir MP4</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredRecordings.map(rec => (
           <div
             key={rec.id}
@@ -203,6 +248,7 @@ export const ArchiveView: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
 
       {/* Video Modal Player (Native HTML5 Video with Signed URL) */}
       <RecordingPlayerModal
