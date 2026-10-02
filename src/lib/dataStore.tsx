@@ -938,7 +938,12 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const saveJournalSession = async (sessionData: Omit<JournalSession, 'id' | 'created_at' | 'user_id'>) => {
-    const { session } = await journalService.saveCompletedSession(currentUser.id, sessionData);
+    const { session, error } = await journalService.saveCompletedSession(currentUser.id, sessionData);
+
+    if (error) {
+      console.error('saveJournalSession failed:', error);
+      throw new Error(error);
+    }
 
     if (session) {
       setUserJournalSessions(prev => {

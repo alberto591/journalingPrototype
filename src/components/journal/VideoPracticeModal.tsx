@@ -40,7 +40,7 @@ export const VideoPracticeModal: React.FC<VideoPracticeModalProps> = ({
         listening_notes: 'Silencio y discernimiento realizados durante la sesión en video.',
         listening_duration_seconds: 300,
         vision_sentence: 'Completada a través de video',
-        identity_words: 'Presencia',
+        identity_words: ['Presencia'],
         action_type: 'action',
         action_commitment: finalCommitment,
         total_duration_minutes: 30,

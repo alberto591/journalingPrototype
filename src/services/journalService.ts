@@ -127,48 +127,89 @@ export const journalService = {
     }
 
     try {
+      // 1. Sanitize string array columns for PostgreSQL TEXT[] columns (gratitude_items, identity_words)
+      const sanitizeStringArray = (val: unknown): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val.map(item => String(item).trim()).filter(Boolean);
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          return trimmed ? [trimmed] : [];
+        }
+        return [];
+      };
+
+      const formattedGratitudeItems = sanitizeStringArray(newRecord.gratitude_items);
+      const formattedIdentityWords = sanitizeStringArray(newRecord.identity_words);
+
+      // 2. Validate UUID format for focus_prompt_id (foreign key to public.daily_prompts)
+      const isValidUUID = (val?: string | null): boolean =>
+        Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+      const sanitizedFocusPromptId = isValidUUID(newRecord.focus_prompt_id) ? newRecord.focus_prompt_id : null;
+      const sanitizedActionType = newRecord.action_type === 'release' ? 'release' : 'action';
+
       // Insert into journal_sessions table
       const { data, error } = await supabase
         .from('journal_sessions')
         .insert({
           user_id: userId,
           date: newRecord.date,
-          breathing_completed: newRecord.breathing_completed,
-          silence_duration_seconds: newRecord.silence_duration_seconds,
-          gratitude_items: newRecord.gratitude_items || [],
-          free_writing_1m: newRecord.free_writing_1m,
-          deep_writing_10m: newRecord.deep_writing_10m,
-          focus_prompt_id: newRecord.focus_prompt_id,
-          focus_prompt_text: newRecord.focus_prompt_text,
-          focus_prompt_answer: newRecord.focus_prompt_answer,
-          vision_sentence: newRecord.vision_sentence,
-          identity_words: newRecord.identity_words || [],
-          listening_notes: newRecord.listening_notes,
-          listening_duration_seconds: newRecord.listening_duration_seconds,
-          action_type: newRecord.action_type,
-          action_commitment: newRecord.action_commitment,
-          total_duration_minutes: newRecord.total_duration_minutes,
+          breathing_completed: Boolean(newRecord.breathing_completed),
+          silence_duration_seconds: newRecord.silence_duration_seconds || 60,
+          gratitude_items: formattedGratitudeItems,
+          free_writing_1m: newRecord.free_writing_1m || '',
+          deep_writing_10m: newRecord.deep_writing_10m || '',
+          focus_prompt_id: sanitizedFocusPromptId,
+          focus_prompt_text: newRecord.focus_prompt_text || null,
+          focus_prompt_answer: newRecord.focus_prompt_answer || null,
+          vision_sentence: newRecord.vision_sentence || null,
+          identity_words: formattedIdentityWords,
+          listening_notes: newRecord.listening_notes || null,
+          listening_duration_seconds: newRecord.listening_duration_seconds || 90,
+          action_type: sanitizedActionType,
+          action_commitment: newRecord.action_commitment || null,
+          total_duration_minutes: newRecord.total_duration_minutes || 30,
           status: 'completed',
         })
         .select()
         .single();
 
       if (error) {
+        console.error('Supabase error inserting journal_session:', error);
         return { session: null, error: `Ha ocurrido un problema al guardar tu sesión: ${error.message}. Inténtalo de nuevo.` };
       }
 
       // Also record commitment in action_commitments table
       if (newRecord.action_commitment && data?.id) {
-        await supabase
-          .from('action_commitments')
-          .insert({
-            user_id: userId,
+        try {
+          await supabase
+            .from('action_commitments')
+            .insert({
+              user_id: userId,
+              session_id: data.id,
+              action_type: sanitizedActionType,
+              commitment_text: newRecord.action_commitment,
+              status: 'pending',
+              due_date: newRecord.date,
+            });
+        } catch (commitErr) {
+          console.warn('Could not record action commitment secondary entry:', commitErr);
+        }
+      }
+
+      // Also record emotions if provided
+      if (sessionData.emotions && sessionData.emotions.length > 0 && data?.id) {
+        try {
+          const emotionRows = sessionData.emotions.map(e => ({
             session_id: data.id,
-            action_type: newRecord.action_type,
-            commitment_text: newRecord.action_commitment,
-            status: 'pending',
-            due_date: newRecord.date,
-          });
+            user_id: userId,
+            emotion_category: e.category,
+            related_to: e.related_to || '',
+          }));
+          await supabase.from('user_emotions').insert(emotionRows);
+        } catch (emotionErr) {
+          console.warn('Could not record user emotions secondary entry:', emotionErr);
+        }
       }
 
       // Clear draft once saved
@@ -176,6 +217,7 @@ export const journalService = {
 
       return { session: data as JournalSession, error: null };
     } catch (err: any) {
+      console.error('Unexpected error in saveCompletedSession:', err);
       return { session: null, error: err?.message || 'Ha ocurrido un problema al guardar tu sesión. Inténtalo de nuevo.' };
     }
   }

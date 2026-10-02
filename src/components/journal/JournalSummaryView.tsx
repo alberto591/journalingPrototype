@@ -212,7 +212,7 @@ Rumbo a la noche sin evasivas. ¡Que tengan un día fecundo!`;
                 Palabra(s) de Identidad
               </div>
               <p className="font-serif font-bold text-base text-stone-900">
-                {session.identity_words}
+                {Array.isArray(session.identity_words) ? session.identity_words.join(', ') : session.identity_words}
               </p>
             </div>
           )}

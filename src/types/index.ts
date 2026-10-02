@@ -184,7 +184,7 @@ export interface JournalSession {
   listening_duration_seconds: number;
   // Movement 5: Actuar (Act)
   vision_sentence?: string;   // 3-month vision re-read (from Holy Work email)
-  identity_words?: string;    // Identity word(s) to become (from Holy Work email)
+  identity_words?: string | string[]; // Identity word(s) to become (Postgres TEXT[])
   action_type: 'action' | 'release'; // 'Acción' or 'Algo que soltar'
   action_commitment: string;
   // Metadata

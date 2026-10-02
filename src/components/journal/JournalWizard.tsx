@@ -72,9 +72,11 @@ export const JournalWizard: React.FC = () => {
   const [visionSentence, setVisionSentence] = useState(
     todayJournalSession?.vision_sentence || journalDraft?.vision_sentence || ''
   );
-  const [identityWords, setIdentityWords] = useState(
-    todayJournalSession?.identity_words || journalDraft?.identity_words || ''
-  );
+  const [identityWords, setIdentityWords] = useState<string>(() => {
+    const raw = todayJournalSession?.identity_words || journalDraft?.identity_words;
+    if (Array.isArray(raw)) return raw.join(', ');
+    return raw || '';
+  });
   const [actionType, setActionType] = useState<'action' | 'release'>(
     todayJournalSession?.action_type || journalDraft?.action_type || 'action'
   );
@@ -125,32 +127,38 @@ export const JournalWizard: React.FC = () => {
 
   const handleFinishSession = async () => {
     setIsSaving(true);
-    const newSession = await saveJournalSession({
-      date: new Date().toISOString().split('T')[0],
-      breathing_completed: true,
-      silence_duration_seconds: silenceDuration,
-      gratitude_items: gratitudeItems,
-      free_writing_1m: freeWriting,
-      deep_writing_10m: deepWriting,
-      focus_prompt_id: focusPrompt.id,
-      focus_prompt_text: focusPrompt.prompt_text,
-      focus_prompt_answer: focusAnswer,
-      emotions: selectedEmotions,
-      listening_notes: listeningNotes,
-      listening_duration_seconds: listeningDuration,
-      vision_sentence: visionSentence,
-      identity_words: identityWords,
-      action_type: actionType,
-      action_commitment: actionCommitment,
-      total_duration_minutes: 30,
-      status: 'completed'
-    });
+    try {
+      const newSession = await saveJournalSession({
+        date: new Date().toISOString().split('T')[0],
+        breathing_completed: true,
+        silence_duration_seconds: silenceDuration,
+        gratitude_items: gratitudeItems,
+        free_writing_1m: freeWriting,
+        deep_writing_10m: deepWriting,
+        focus_prompt_id: focusPrompt.id,
+        focus_prompt_text: focusPrompt.prompt_text,
+        focus_prompt_answer: focusAnswer,
+        emotions: selectedEmotions,
+        listening_notes: listeningNotes,
+        listening_duration_seconds: listeningDuration,
+        vision_sentence: visionSentence,
+        identity_words: identityWords,
+        action_type: actionType,
+        action_commitment: actionCommitment,
+        total_duration_minutes: 30,
+        status: 'completed'
+      });
 
-    setIsSaving(false);
-    if (newSession) {
-      setCompletedSession(newSession);
+      if (newSession) {
+        setCompletedSession(newSession);
+      }
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error('Error saving journal session from wizard:', err);
+      alert(err?.message || 'Ha ocurrido un error al guardar la sesión. Inténtalo de nuevo.');
+    } finally {
+      setIsSaving(false);
     }
-    navigate('/dashboard');
   };
 
   const handleRestartPractice = () => {
