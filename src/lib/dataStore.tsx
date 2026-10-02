@@ -15,7 +15,8 @@ import {
   OngoingCycle,
   CycleReflection,
   MemberHistoryItem,
-  ContinuousRetentionMetrics
+  ContinuousRetentionMetrics,
+  MembershipStatus
 } from '../types';
 import { 
   DEMO_CURRENT_USER, 
@@ -38,6 +39,7 @@ import { adminService } from '../services/adminService';
 import { journeyService, INITIAL_ONGOING_CYCLES } from '../services/journeyService';
 import { recordingsService } from '../services/recordingsService';
 import { zoomService } from '../services/zoomService';
+import { businessService } from '../services/businessService';
 
 interface DataStoreContextType {
   currentUser: Profile;
@@ -141,6 +143,7 @@ interface DataStoreContextType {
   submitCycleReflection: (cycleId: string, cycleTitle: string, reflection: { discovered: string; changed: string; carrying_forward: string; explore_next: string }) => Promise<void>;
   addOngoingCycle: (cycle: OngoingCycle) => Promise<void>;
   updateOngoingCycle: (id: string, updates: Partial<OngoingCycle>) => Promise<void>;
+  updateMemberMembership: (userId: string, status: MembershipStatus, durationDays?: number) => Promise<{ success: boolean; error: string | null }>;
 
   // Onboarding
   onboardingData: OnboardingData | null;
@@ -550,6 +553,21 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const updated = ongoingCycles.map(c => c.id === id ? { ...c, ...updates } : c);
     setOngoingCycles(updated);
     journeyService.saveOngoingCycles(updated);
+  };
+
+  const updateMemberMembership = async (userId: string, status: MembershipStatus, durationDays: number = 30) => {
+    const res = await businessService.activateMembershipManually({
+      userId,
+      status,
+      durationDays,
+    });
+    if (res.success) {
+      setMembers(prev => prev.map(m => m.id === userId ? { ...m, membership_status: status } : m));
+      if (currentUser.id === userId) {
+        setCurrentUser(prev => ({ ...prev, membership_status: status }));
+      }
+    }
+    return res;
   };
 
   // -------------------------------------------------------------
@@ -1065,6 +1083,7 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         submitCycleReflection,
         addOngoingCycle,
         updateOngoingCycle,
+        updateMemberMembership,
       }}
     >
       {children}

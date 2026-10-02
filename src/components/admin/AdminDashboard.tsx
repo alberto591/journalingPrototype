@@ -13,7 +13,8 @@ import {
   FeedbackResponse, 
   CustomerInterview, 
   ProductLogEntry,
-  SessionRecording 
+  SessionRecording,
+  MembershipStatus
 } from '../../types';
 import { businessService, DEFAULT_BUSINESS_SETTINGS } from '../../services/businessService';
 import { contentService } from '../../services/contentService';
@@ -86,7 +87,8 @@ export const AdminDashboard: React.FC = () => {
     currentGlobalCommunityWeek,
     continuousRetentionMetrics,
     addOngoingCycle,
-    updateOngoingCycle
+    updateOngoingCycle,
+    updateMemberMembership
   } = useDataStore();
 
 
@@ -119,6 +121,7 @@ export const AdminDashboard: React.FC = () => {
   const [showAddLogModal, setShowAddLogModal] = useState(false);
   const [showAddCycleModal, setShowAddCycleModal] = useState(false);
   const [showActivateMemberModal, setShowActivateMemberModal] = useState<Profile | null>(null);
+  const [selectedTargetStatus, setSelectedTargetStatus] = useState<MembershipStatus>('ACTIVE');
   const [selectedMemberForInterview, setSelectedMemberForInterview] = useState<Profile | null>(null);
   const [activationDurationDays, setActivationDurationDays] = useState<number>(30);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
@@ -451,13 +454,17 @@ export const AdminDashboard: React.FC = () => {
 
   const handleManualActivation = async () => {
     if (!showActivateMemberModal) return;
-    await businessService.activateMembershipManually({
-      userId: showActivateMemberModal.id,
-      durationDays: activationDurationDays,
-      status: 'ACTIVE',
-    });
+    const res = await updateMemberMembership(
+      showActivateMemberModal.id,
+      selectedTargetStatus,
+      activationDurationDays
+    );
+    if (!res.success) {
+      triggerSuccessFeedback(`Error: ${res.error || 'No se pudo actualizar la membresía'}`);
+      return;
+    }
     setShowActivateMemberModal(null);
-    triggerSuccessFeedback(`Membresía activada por ${activationDurationDays} días para ${showActivateMemberModal.name}.`);
+    triggerSuccessFeedback(`Membresía actualizada a ${selectedTargetStatus} para ${showActivateMemberModal.name}.`);
   };
 
   const handleUpdateSettings = async (updates: Partial<BusinessSettings>) => {
@@ -1113,6 +1120,12 @@ export const AdminDashboard: React.FC = () => {
                               ? 'bg-amber-100 text-amber-900'
                               : m.membership_status === 'ACTIVE'
                               ? 'bg-emerald-100 text-emerald-800'
+                              : m.membership_status === 'EXPIRED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : m.membership_status === 'TRIAL'
+                              ? 'bg-blue-100 text-blue-800'
+                              : m.membership_status === 'CANCELLED'
+                              ? 'bg-stone-200 text-stone-700'
                               : 'bg-sand-200 text-stone-700'
                           }`}>
                             {m.role === 'admin' ? 'Fundador' : (m.membership_status || 'ACTIVO')}
@@ -1159,10 +1172,14 @@ export const AdminDashboard: React.FC = () => {
                               <span>Entrevistar</span>
                             </button>
                             <button
-                              onClick={() => setShowActivateMemberModal(m)}
+                              onClick={() => {
+                                setShowActivateMemberModal(m);
+                                setSelectedTargetStatus((m.membership_status as MembershipStatus) || 'ACTIVE');
+                              }}
                               className="travesia-btn-primary text-[10px] py-1 px-2.5 font-semibold"
+                              title="Gestionar estado de membresía"
                             >
-                              Activar
+                              Membresía
                             </button>
                           </div>
                         </td>
@@ -1959,40 +1976,103 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: MANUAL MEMBERSHIP ACTIVATION */}
+      {/* MODAL: MEMBERSHIP STATUS MANAGEMENT */}
       {showActivateMemberModal && (
         <div className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-sand-200 shadow-2xl space-y-4">
-            <h3 className="font-serif font-bold text-lg text-stone-900">
-              Activar Membresía Manualmente
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif font-bold text-lg text-stone-900">
+                Gestionar Membresía
+              </h3>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                showActivateMemberModal.membership_status === 'ACTIVE'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : showActivateMemberModal.membership_status === 'EXPIRED'
+                  ? 'bg-rose-100 text-rose-800'
+                  : showActivateMemberModal.membership_status === 'TRIAL'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-sand-100 text-stone-700'
+              }`}>
+                Actual: {showActivateMemberModal.membership_status || 'TRIAL'}
+              </span>
+            </div>
+
             <p className="text-xs text-stone-600 leading-relaxed">
-              Asigna acceso completo de miembro a <strong className="text-stone-900">{showActivateMemberModal.name}</strong> tras validar su pago por transferencia o factura.
+              Modifica el estado de suscripción de <strong className="text-stone-900">{showActivateMemberModal.name}</strong> ({showActivateMemberModal.email || 'Miembro'}).
             </p>
 
+            {/* Status selector */}
             <div className="space-y-2 text-xs">
-              <label className="block font-semibold text-stone-700">Duración del acceso:</label>
-              <div className="grid grid-cols-3 gap-2">
+              <label className="block font-semibold text-stone-700">Nuevo Estado de Membresía:</label>
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { days: 30, label: '30 días (1 mes)' },
-                  { days: 90, label: '90 días (1 ciclo)' },
-                  { days: 365, label: '365 días (1 año)' },
+                  { id: 'ACTIVE', label: 'ACTIVO', desc: 'Acceso total habilitado' },
+                  { id: 'EXPIRED', label: 'EXPIRED', desc: 'Prueba vencida (Paywall)' },
+                  { id: 'TRIAL', label: 'TRIAL', desc: 'Prueba gratuita de 7 días' },
+                  { id: 'CANCELLED', label: 'CANCELLED', desc: 'Suscripción cancelada' },
                 ].map(opt => (
                   <button
-                    key={opt.days}
+                    key={opt.id}
                     type="button"
-                    onClick={() => setActivationDurationDays(opt.days)}
-                    className={`py-2 px-2 rounded-xl font-semibold border text-center transition-all ${
-                      activationDurationDays === opt.days
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-sand-50 text-stone-700 border-sand-200'
+                    onClick={() => setSelectedTargetStatus(opt.id as MembershipStatus)}
+                    className={`p-2.5 rounded-xl text-left border transition-all ${
+                      selectedTargetStatus === opt.id
+                        ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
+                        : 'bg-sand-50/80 hover:bg-sand-100 text-stone-800 border-sand-200'
                     }`}
                   >
-                    {opt.label}
+                    <div className="font-bold font-mono text-xs">{opt.label}</div>
+                    <div className={`text-[10px] mt-0.5 ${selectedTargetStatus === opt.id ? 'text-sand-300' : 'text-stone-500'}`}>
+                      {opt.desc}
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
+
+            {selectedTargetStatus === 'ACTIVE' && (
+              <div className="space-y-2 text-xs pt-1">
+                <label className="block font-semibold text-stone-700">Duración del acceso:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { days: 30, label: '30 días (1 mes)' },
+                    { days: 90, label: '90 días (1 ciclo)' },
+                    { days: 365, label: '365 días (1 año)' },
+                  ].map(opt => (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() => setActivationDurationDays(opt.days)}
+                      className={`py-2 px-2 rounded-xl font-semibold border text-center transition-all ${
+                        activationDurationDays === opt.days
+                          ? 'bg-amber-500 text-stone-950 border-amber-600 font-bold'
+                          : 'bg-sand-50 text-stone-700 border-sand-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedTargetStatus === 'EXPIRED' && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900">
+                <p className="font-semibold">Simulación de pase vencido:</p>
+                <p className="text-[11px] text-rose-700 mt-0.5">
+                  El usuario verá inmediatamente la ventana modal de período de prueba finalizado y el paywall de suscripción para convertirse en Miembro Fundador.
+                </p>
+              </div>
+            )}
+
+            {selectedTargetStatus === 'TRIAL' && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
+                <p className="font-semibold">Prueba Gratuita:</p>
+                <p className="text-[11px] text-blue-700 mt-0.5">
+                  El usuario dispondrá de 7 días de acceso para experimentar el camino de Travesía.
+                </p>
+              </div>
+            )}
 
             <div className="pt-3 flex justify-end gap-2 text-xs">
               <button
@@ -2007,7 +2087,7 @@ export const AdminDashboard: React.FC = () => {
                 onClick={handleManualActivation}
                 className="travesia-btn-primary py-2 px-5"
               >
-                Confirmar Activación
+                Guardar Cambio
               </button>
             </div>
           </div>
