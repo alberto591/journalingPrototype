@@ -11,19 +11,25 @@ import {
   PenLine,
   Flame,
   Award,
-  Video
+  Video,
+  PlayCircle,
+  Film
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 import { VideoPracticeModal } from '../journal/VideoPracticeModal';
+import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
+import { SessionRecording } from '../../types';
 
 export const RightSidebar: React.FC = () => {
   const navigate = useNavigate();
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [activeRecordingForPlayer, setActiveRecordingForPlayer] = useState<SessionRecording | null>(null);
   const { 
     currentUser, 
     members, 
     posts, 
     events, 
+    recordings,
     nextUpcomingEvent,
     todayJournalSession, 
     toggleRegisterEvent,
@@ -32,6 +38,36 @@ export const RightSidebar: React.FC = () => {
 
   const nextSession = nextUpcomingEvent || events.find(e => e.status === 'upcoming') || events[0];
   const adminCount = members.filter(m => m.role === 'admin').length;
+
+  const nextSessionRecording = React.useMemo(() => {
+    if (!nextSession) return null;
+    return recordings.find(r => 
+      r.event_id === nextSession.id || 
+      (nextSession.recording_id && r.id === nextSession.recording_id) ||
+      (nextSession.recording_url && (r.storage_path === nextSession.recording_url || r.video_url === nextSession.recording_url)) ||
+      (r.storage_path && r.storage_path.includes(nextSession.id))
+    ) || (nextSession.recording_url ? {
+      id: nextSession.recording_id || `rec-${nextSession.id}`,
+      event_id: nextSession.id,
+      title: nextSession.title || 'Sesión en Directo',
+      description: nextSession.description || '',
+      date: nextSession.date ? nextSession.date.split('T')[0] : new Date().toISOString().split('T')[0],
+      duration: `${nextSession.duration_minutes || 35} min`,
+      duration_seconds: (nextSession.duration_minutes || 35) * 60,
+      category: nextSession.theme || 'El Presente',
+      storage_path: nextSession.recording_url,
+      video_url: nextSession.recording_url,
+      thumbnail_url: nextSession.host_avatar || '',
+      status: 'AVAILABLE' as const,
+      views_count: nextSession.attendees_count || 1,
+      is_member_only: true,
+    } : null);
+  }, [nextSession, recordings]);
+
+  const latestRecording = React.useMemo(() => {
+    if (recordings.length === 0) return null;
+    return recordings[0];
+  }, [recordings]);
 
   const currentCycleDisplay = React.useMemo(() => {
     const now = new Date();
@@ -192,24 +228,80 @@ export const RightSidebar: React.FC = () => {
             <span>{nextSession.attendees_count} inscritos</span>
           </div>
 
+          {nextSessionRecording ? (
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => setActiveRecordingForPlayer(nextSessionRecording)}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-sm"
+              >
+                <PlayCircle className="w-4 h-4 text-stone-950" />
+                <span>Ver Grabación en Directo</span>
+              </button>
+              {nextSession.status === 'upcoming' && (
+                <button
+                  onClick={() => toggleRegisterEvent(nextSession.id)}
+                  className={`w-full py-1.5 px-3 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
+                    nextSession.user_is_registered
+                      ? 'bg-sand-100 text-stone-700 border border-sand-300'
+                      : 'bg-stone-100 hover:bg-sand-200 text-stone-700'
+                  }`}
+                >
+                  {nextSession.user_is_registered ? '✓ Registrado' : 'Inscribirme al directo'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => toggleRegisterEvent(nextSession.id)}
+              className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                nextSession.user_is_registered
+                  ? 'bg-sand-100 hover:bg-sand-200 text-stone-800 border border-sand-300'
+                  : 'bg-stone-900 hover:bg-stone-800 text-white'
+              }`}
+            >
+              {nextSession.user_is_registered ? (
+                <>
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  Registrado · Entrar en la sesión →
+                </>
+              ) : (
+                <>
+                  Inscribirme a la sesión →
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 3b. Latest Recorded Live Session */}
+      {latestRecording && (!nextSessionRecording || nextSessionRecording.id !== latestRecording.id) && (
+        <div className="travesia-card p-4 space-y-2.5 bg-gradient-to-br from-stone-900 to-stone-950 text-white border-stone-800 shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <Film className="w-3.5 h-3.5" />
+              Grabación en directo
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-800 text-stone-300">
+              {latestRecording.duration || '35 min'}
+            </span>
+          </div>
+
+          <div>
+            <h4 className="font-serif font-bold text-sm text-sand-50 line-clamp-1">
+              {latestRecording.title}
+            </h4>
+            <p className="text-[11px] text-stone-400 line-clamp-2 mt-0.5">
+              {latestRecording.description || 'Grabación de la práctica matutina y mentoría en vivo.'}
+            </p>
+          </div>
+
           <button
-            onClick={() => toggleRegisterEvent(nextSession.id)}
-            className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-              nextSession.user_is_registered
-                ? 'bg-sand-100 hover:bg-sand-200 text-stone-800 border border-sand-300'
-                : 'bg-stone-900 hover:bg-stone-800 text-white'
-            }`}
+            onClick={() => setActiveRecordingForPlayer(latestRecording)}
+            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 transition-all shadow-sm"
           >
-            {nextSession.user_is_registered ? (
-              <>
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                Registrado · Entrar en la sesión →
-              </>
-            ) : (
-              <>
-                Inscribirme a la sesión →
-              </>
-            )}
+            <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
+            Reproducir Grabación
           </button>
         </div>
       )}
@@ -290,6 +382,15 @@ export const RightSidebar: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Recording Player Modal */}
+      {activeRecordingForPlayer && (
+        <RecordingPlayerModal
+          isOpen={Boolean(activeRecordingForPlayer)}
+          recording={activeRecordingForPlayer}
+          onClose={() => setActiveRecordingForPlayer(null)}
+        />
+      )}
     </aside>
   );
 };

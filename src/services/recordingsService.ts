@@ -89,6 +89,80 @@ export const recordingsService = {
         // Fallback gracefully
       }
 
+      // Also discover any recordings uploaded directly to Supabase Storage bucket
+      try {
+        const { data: storageFolders } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .list('');
+
+        if (storageFolders && storageFolders.length > 0) {
+          for (const item of storageFolders) {
+            // If item has no id or name doesn't contain a dot, it is a folder (e.g. evt-1790926685672)
+            if (!item.id || !item.name.includes('.')) {
+              const { data: subFiles } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .list(item.name);
+
+              if (subFiles && subFiles.length > 0) {
+                for (const subFile of subFiles) {
+                  if (subFile.name && (subFile.name.endsWith('.mp4') || subFile.name.endsWith('.mov') || subFile.name.endsWith('.webm'))) {
+                    const fullPath = `session-recordings/${item.name}/${subFile.name}`;
+                    const alreadyInList = list.some(
+                      r => r.storage_path === fullPath || r.video_url === fullPath || (r.storage_path && r.storage_path.endsWith(subFile.name))
+                    );
+                    if (!alreadyInList) {
+                      const recId = subFile.name.replace(/\.[^/.]+$/, '');
+                      list.push({
+                        id: recId,
+                        event_id: item.name,
+                        title: 'Grabación de Sesión en Directo',
+                        description: 'Grabación de la sesión matutina de práctica y reflexión.',
+                        date: subFile.created_at ? subFile.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                        duration: '35 min',
+                        duration_seconds: 2100,
+                        category: 'El Presente',
+                        storage_path: fullPath,
+                        video_url: fullPath,
+                        thumbnail_url: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+                        status: 'AVAILABLE',
+                        views_count: 1,
+                        is_member_only: true,
+                      });
+                    }
+                  }
+                }
+              }
+            } else if (item.name && (item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm'))) {
+              const fullPath = `session-recordings/${item.name}`;
+              const alreadyInList = list.some(
+                r => r.storage_path === fullPath || r.video_url === fullPath || (r.storage_path && r.storage_path.endsWith(item.name))
+              );
+              if (!alreadyInList) {
+                const recId = item.name.replace(/\.[^/.]+$/, '');
+                list.push({
+                  id: recId,
+                  event_id: 'session-direct',
+                  title: 'Grabación de Sesión en Directo',
+                  description: 'Grabación de la sesión matutina de práctica y reflexión.',
+                  date: item.created_at ? item.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                  duration: '35 min',
+                  duration_seconds: 2100,
+                  category: 'El Presente',
+                  storage_path: fullPath,
+                  video_url: fullPath,
+                  thumbnail_url: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+                  status: 'AVAILABLE',
+                  views_count: 1,
+                  is_member_only: true,
+                });
+              }
+            }
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      }
+
       return { recordings: list, error: null };
     } catch (err: any) {
       return { recordings: [], error: err?.message || 'Error al obtener grabaciones.' };
@@ -120,8 +194,9 @@ export const recordingsService = {
       };
     }
 
-    // Active memberships or active 7-day trials have access
-    const isMemberActive = user.membership_status === 'ACTIVE' || user.membership_status === 'TRIAL';
+    // Active memberships or active 7-day trials have access (case-insensitive and Spanish alias safe)
+    const rawStatus = (user.membership_status || 'TRIAL').toString().toUpperCase();
+    const isMemberActive = rawStatus === 'ACTIVE' || rawStatus === 'ACTIVO' || rawStatus === 'TRIAL';
 
     if (isMemberActive) {
       return {
