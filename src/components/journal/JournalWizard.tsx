@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
 import { DailyPrompt, EmotionSelection, JournalSession } from '../../types';
 import { MovementSlowDown } from './MovementSlowDown';
@@ -10,6 +11,7 @@ import { JournalSummaryView } from './JournalSummaryView';
 import { Lock, RotateCcw, ShieldCheck } from 'lucide-react';
 
 export const JournalWizard: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     todayPrompt, 
     todayJournalSession, 
@@ -145,8 +147,8 @@ export const JournalWizard: React.FC = () => {
     setIsSaving(false);
     if (newSession) {
       setCompletedSession(newSession);
-      setViewingSummary(true);
     }
+    navigate('/dashboard');
   };
 
   const handleRestartPractice = () => {
