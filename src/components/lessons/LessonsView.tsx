@@ -15,11 +15,28 @@ import {
   ChevronUp
 } from 'lucide-react';
 
-export const LessonsView: React.FC = () => {
+interface LessonsViewProps {
+  initialLessonId?: string;
+}
+
+export const LessonsView: React.FC<LessonsViewProps> = ({ initialLessonId }) => {
   const { lessons, completeLesson } = useDataStore();
-  const [selectedLesson, setSelectedLesson] = useState<Lesson>(lessons[0]);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson>(() => {
+    if (initialLessonId) {
+      const match = lessons.find(l => l.id === initialLessonId);
+      if (match) return match;
+    }
+    return lessons[0];
+  });
   const [reflectionAnswer, setReflectionAnswer] = useState('');
   const [savedReflection, setSavedReflection] = useState(false);
+
+  React.useEffect(() => {
+    if (initialLessonId) {
+      const match = lessons.find(l => l.id === initialLessonId);
+      if (match) setSelectedLesson(match);
+    }
+  }, [initialLessonId, lessons]);
 
   const completedCount = lessons.filter(l => l.status === 'completed').length;
   const progressPercent = Math.round((completedCount / lessons.length) * 100);

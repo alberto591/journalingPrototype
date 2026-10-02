@@ -21,7 +21,8 @@ import {
   Flame, 
   Clock, 
   Layers, 
-  HeartHandshake
+  HeartHandshake,
+  PenLine
 } from 'lucide-react';
 
 interface FourWeekJourneyViewProps {
@@ -52,6 +53,7 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
   const [selectedFoundationWeek, setSelectedFoundationWeek] = useState<number>(
     personalJourneyProgress?.current_week || currentUser.current_week || 1
   );
+  const [selectedLessonId, setSelectedLessonId] = useState<string | undefined>(undefined);
 
   // Reflection form state for ongoing cycle completion
   const [reflection1, setReflection1] = useState('');
@@ -61,6 +63,9 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
   const [reflectionSuccess, setReflectionSuccess] = useState(false);
   const [showReflectionModal, setShowReflectionModal] = useState(false);
 
+  const currentActiveWeek = personalJourneyProgress?.current_week || currentUser.current_week || 1;
+  const currentActiveDay = personalJourneyProgress?.current_day || 1;
+
   const FOUNDATION_WEEKS = [
     {
       number: 1,
@@ -68,6 +73,8 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
       tagline: 'Construyendo el cimiento de la práctica diaria',
       icon: Compass,
       focus: 'Aprender a parar, bajar el ritmo y habitar el ahora ante Dios.',
+      lessonId: 'les-2-1',
+      lessonTitle: 'El Presente: El mito de la falta de tiempo',
       topics: [
         'Frenar y Desacelerar: Salir del modo reactivo del mundo exterior',
         'Limpiar el Ruido Mental: Trasladar el desorden mental al papel blanco',
@@ -89,6 +96,8 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
       tagline: '¿Qué clase de vida estás realmente llamado a construir?',
       icon: Eye,
       focus: 'Diseñar el mapa de tu vida con sobriedad y propósito espiritual.',
+      lessonId: 'les-4-1',
+      lessonTitle: 'La Visión: Definir tu norte ante Dios y tu familia',
       topics: [
         'Vida Ideal Realista: El ejercicio del "martes normal" a 3 años vista',
         'Valores No Negociables: Principios que guían tus decisiones bajo presión',
@@ -110,6 +119,8 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
       tagline: '¿Qué se interpone entre tú y la vida que buscas forjar?',
       icon: ShieldAlert,
       focus: 'Desmontar el autoengaño, la evasión y las trampas del ego.',
+      lessonId: 'les-5-1',
+      lessonTitle: 'Los Obstáculos: Nombrar las trampas del ego y autoboicot',
       topics: [
         'Miedo al Fracaso & Vergüenza: Cómo nos paraliza el qué dirán',
         'Patrones de Evasión: Las adicciones sutiles al trabajo, pantallas o comida',
@@ -130,6 +141,8 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
       tagline: 'Lo que realmente requerirá de ti en la práctica',
       icon: Hammer,
       focus: 'Forjar el carácter mediante la disciplina, los límites y el coraje.',
+      lessonId: 'les-6-1',
+      lessonTitle: 'El Trabajo: La conversación difícil y el límite sagrado',
       topics: [
         'Límites Inquebrantables: Aprender a decir "no" sin culpa',
         'Conversaciones Difíciles: Decir la verdad con amor y firmeza',
@@ -173,34 +186,66 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
     <div className="max-w-4xl mx-auto py-4 px-4 space-y-8 animate-fade-in">
       {/* Top Experience Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-sand-200 pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('foundation')}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'foundation'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
-            }`}
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span>Primer Recorrido (Foundation)</span>
-            {isFoundationCompleted && (
-              <span className="text-[10px] bg-emerald-800 text-emerald-200 px-1.5 py-0.2 rounded-full">✓</span>
-            )}
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {!isFoundationCompleted ? (
+            <>
+              <button
+                onClick={() => setActiveTab('foundation')}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'foundation'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5 text-amber-400" />
+                <span>Primer Recorrido (4 Semanas)</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-bold">
+                  Semana {currentActiveWeek}/4
+                </span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('ongoing')}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'ongoing'
-                ? 'bg-stone-900 text-white shadow-sm'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Capítulos Continuos (Ciclos)</span>
-            <span className="text-[10px] bg-amber-500/20 text-amber-700 px-1.5 py-0.2 rounded-full font-bold">En Vivo</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('ongoing')}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'ongoing'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Ciclos de la Comunidad</span>
+                <span className="text-[10px] bg-sand-200 text-stone-700 px-1.5 py-0.2 rounded-full font-medium">En Vivo</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setActiveTab('ongoing')}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'ongoing'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                <span>Capítulos Continuos (Ciclos)</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-bold">En Vivo</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('foundation')}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'foundation'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>Primer Recorrido</span>
+                <span className="text-[10px] bg-emerald-800 text-emerald-200 px-1.5 py-0.2 rounded-full">✓</span>
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => setActiveTab('lessons')}
@@ -253,7 +298,7 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
                   </span>
                 ) : (
                   <span className="text-xs bg-amber-950/80 text-amber-300 border border-amber-700/50 px-3 py-1 rounded-full font-medium">
-                    Semana {personalJourneyProgress?.current_week || 1} de 4 · Día {personalJourneyProgress?.current_day || 1}
+                    Semana {currentActiveWeek} de 4 · Día {currentActiveDay} de 7
                   </span>
                 )}
               </div>
@@ -284,7 +329,9 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {FOUNDATION_WEEKS.map(w => {
               const isSelected = selectedFoundationWeek === w.number;
-              const isCurrent = (personalJourneyProgress?.current_week || 1) === w.number;
+              const isCurrent = currentActiveWeek === w.number && !isFoundationCompleted;
+              const isPast = isFoundationCompleted || w.number < currentActiveWeek;
+              const isFuture = !isFoundationCompleted && w.number > currentActiveWeek;
               const Icon = w.icon;
 
               return (
@@ -308,14 +355,19 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
                   <p className="font-serif font-bold text-base leading-tight">
                     {w.title}
                   </p>
-                  {isCurrent && !isFoundationCompleted && (
-                    <span className="inline-block mt-2 text-[10px] font-semibold text-amber-500">
-                      ● Tu semana activa
+                  {isCurrent && (
+                    <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-amber-500">
+                      ● En curso (Día {currentActiveDay}/7)
                     </span>
                   )}
-                  {isFoundationCompleted && (
+                  {isPast && (
                     <span className="inline-block mt-2 text-[10px] font-semibold text-emerald-600">
                       ✓ Completada
+                    </span>
+                  )}
+                  {isFuture && (
+                    <span className="inline-flex items-center gap-1 mt-2 text-[10px] text-stone-400">
+                      <Lock className="w-2.5 h-2.5" /> Próxima
                     </span>
                   )}
                 </button>
@@ -336,6 +388,69 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
                 {currentFoundationWeekData.focus}
               </p>
             </div>
+
+            {/* Interactive Daily Practice Callout if this is the user's active week */}
+            {selectedFoundationWeek === currentActiveWeek && !isFoundationCompleted && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-300/80 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-xs uppercase font-bold tracking-wider text-amber-900">
+                      Tu Práctica de Hoy · Día {currentActiveDay} de 7
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium text-stone-600">
+                    Semana {currentActiveWeek}: {currentFoundationWeekData.title}
+                  </span>
+                </div>
+
+                {/* 7 Days Visual Pills */}
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
+                    const isDayPast = dayNum < currentActiveDay;
+                    const isDayToday = dayNum === currentActiveDay;
+                    return (
+                      <div
+                        key={dayNum}
+                        className={`p-2 rounded-xl text-center border transition-all ${
+                          isDayToday
+                            ? 'bg-stone-900 border-stone-900 text-white shadow-sm ring-2 ring-amber-400/70'
+                            : isDayPast
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            : 'bg-white border-sand-200 text-stone-400'
+                        }`}
+                      >
+                        <span className="block text-[10px] font-bold uppercase">
+                          D{dayNum}
+                        </span>
+                        <span className="block text-xs font-semibold mt-0.5">
+                          {isDayPast ? '✓' : isDayToday ? 'Hoy' : '—'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Day prompt / topic callout */}
+                <div className="pt-2 border-t border-amber-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 block">
+                      Eje del Día {currentActiveDay}
+                    </span>
+                    <p className="text-xs sm:text-sm font-serif font-bold text-stone-900">
+                      {currentFoundationWeekData.topics[currentActiveDay - 1] || currentFoundationWeekData.topics[0]}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate('/journal/today')}
+                    className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-2 transition-all flex-shrink-0"
+                  >
+                    <PenLine className="w-3.5 h-3.5" />
+                    <span>Hacer la práctica de hoy en el Diario →</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Topics List */}
             <div>
@@ -376,61 +491,142 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
                 ))}
               </div>
             </div>
+
+            {/* Connected Foundational Lesson */}
+            <div className="p-4 rounded-2xl bg-sand-100/80 border border-sand-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-stone-900 text-amber-400 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 block">
+                    Lección Formativa de la Semana {currentFoundationWeekData.number}
+                  </span>
+                  <p className="font-serif font-bold text-stone-900 text-sm">
+                    {currentFoundationWeekData.lessonTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedLessonId(currentFoundationWeekData.lessonId);
+                  setActiveTab('lessons');
+                }}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-stone-900 hover:text-white border border-sand-300 text-stone-800 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto flex-shrink-0 shadow-sm"
+              >
+                <span>Ver lección formativa</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* REQUIREMENT 2 & 10: END OF FOUR WEEKS / TRANSITION TO ONGOING */}
-          <div className="travesia-card p-6 sm:p-8 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 text-white space-y-4">
-            <div className="flex items-center gap-2">
-              <Award className="w-6 h-6 text-amber-400" />
-              <span className="text-xs uppercase font-bold tracking-widest text-amber-400">
-                {isFoundationCompleted ? 'Primer Recorrido Completado' : 'Culminación del Primer Recorrido'}
-              </span>
-            </div>
+          {/* PROGRESSION / CULMINATION BLOCK */}
+          {!isFoundationCompleted && currentActiveWeek < 4 ? (
+            <div className="travesia-card p-6 sm:p-8 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 text-white space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-400" />
+                  <span className="text-xs uppercase font-bold tracking-widest text-amber-400">
+                    Progreso de Tu Primer Recorrido
+                  </span>
+                </div>
+                <span className="text-xs text-stone-400 font-mono">
+                  {Math.round((((currentActiveWeek - 1) * 7 + currentActiveDay) / 28) * 100)}% completado
+                </span>
+              </div>
 
-            <div>
-              <h3 className="font-serif text-2xl sm:text-3xl font-bold text-white">
-                "Has completado tu primer recorrido."
-              </h3>
-              <p className="text-stone-300 text-sm mt-2 font-serif italic leading-relaxed">
-                "Esto no era la meta. Era aprender a hacer el trabajo."
-              </p>
-              <p className="text-stone-400 text-xs mt-2 leading-relaxed">
-                Tu siguiente capítulo comienza ahora. La comunidad continúa cada mes explorando un eje vital diferente (Relaciones, Propósito, Disciplina, Coraje, Límites) mediante la práctica matutina y encuentros en vivo.
-              </p>
-            </div>
+              <div>
+                <h3 className="font-serif text-2xl sm:text-3xl font-bold text-white">
+                  "Estás forjando el cimiento de tu vida interior."
+                </h3>
+                <p className="text-stone-300 text-sm mt-2 font-serif italic leading-relaxed">
+                  "No corras. Aprender a parar y escribir con honestidad ante Dios es el trabajo."
+                </p>
+                <p className="text-stone-400 text-xs mt-2 leading-relaxed">
+                  Semana {currentActiveWeek} de 4 · Día {currentActiveDay} de 7. Al completar tus 4 semanas de preparación, desbloquearás la graduación y pasarás de lleno al ritmo continuo de los ciclos comunitarios.
+                </p>
+              </div>
 
-            <div className="pt-3 flex flex-wrap items-center gap-4">
-              {!isFoundationCompleted ? (
+              {/* Progress Bar */}
+              <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((((currentActiveWeek - 1) * 7 + currentActiveDay) / 28) * 100)}%` }}
+                />
+              </div>
+
+              <div className="pt-2 flex flex-wrap items-center gap-4">
                 <button
-                  onClick={handleCompleteFoundation}
+                  onClick={() => navigate('/journal/today')}
                   className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
                 >
-                  <span>Empezar mi próximo capítulo</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <PenLine className="w-4 h-4" />
+                  <span>Continuar Práctica de Hoy en el Diario</span>
                 </button>
-              ) : currentUser?.membership_status === 'EXPIRED' ? (
-                <button
-                  onClick={() => navigate('/membership?from=ongoing_cycles_expired')}
-                  className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
-                >
-                  <span>CONTINUAR EN TRAVESÍA</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              ) : (
+
                 <button
                   onClick={() => setActiveTab('ongoing')}
-                  className="px-6 py-3 rounded-2xl bg-stone-800 hover:bg-stone-700 text-sand-50 font-bold text-xs uppercase tracking-wider border border-stone-700 flex items-center gap-2 transition-all"
+                  className="px-6 py-3 rounded-2xl bg-stone-800 hover:bg-stone-700 text-sand-100 font-semibold text-xs border border-stone-700 flex items-center gap-2 transition-all"
                 >
-                  <span>Explorar el Ciclo Actual de la Comunidad ({currentCommunityCycle?.title})</span>
+                  <span>Ver Ciclo Global de la Comunidad</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
-              )}
-
-              <span className="text-[11px] text-stone-400">
-                Tu membresía activa te da acceso ininterrumpido a todos los ciclos continuos.
-              </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="travesia-card p-6 sm:p-8 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 text-white space-y-4">
+              <div className="flex items-center gap-2">
+                <Award className="w-6 h-6 text-amber-400" />
+                <span className="text-xs uppercase font-bold tracking-widest text-amber-400">
+                  {isFoundationCompleted ? 'Primer Recorrido Completado' : 'Culminación del Primer Recorrido'}
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-serif text-2xl sm:text-3xl font-bold text-white">
+                  "Has completado tu primer recorrido."
+                </h3>
+                <p className="text-stone-300 text-sm mt-2 font-serif italic leading-relaxed">
+                  "Esto no era la meta. Era aprender a hacer el trabajo."
+                </p>
+                <p className="text-stone-400 text-xs mt-2 leading-relaxed">
+                  Tu siguiente capítulo comienza ahora. La comunidad continúa cada mes explorando un eje vital diferente (Relaciones, Propósito, Disciplina, Coraje, Límites) mediante la práctica matutina y encuentros en vivo.
+                </p>
+              </div>
+
+              <div className="pt-3 flex flex-wrap items-center gap-4">
+                {!isFoundationCompleted ? (
+                  <button
+                    onClick={handleCompleteFoundation}
+                    className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
+                  >
+                    <span>Empezar mi próximo capítulo</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : currentUser?.membership_status === 'EXPIRED' ? (
+                  <button
+                    onClick={() => navigate('/membership?from=ongoing_cycles_expired')}
+                    className="px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
+                  >
+                    <span>CONTINUAR EN TRAVESÍA</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setActiveTab('ongoing')}
+                    className="px-6 py-3 rounded-2xl bg-stone-800 hover:bg-stone-700 text-sand-50 font-bold text-xs uppercase tracking-wider border border-stone-700 flex items-center gap-2 transition-all"
+                  >
+                    <span>Explorar el Ciclo Actual de la Comunidad ({currentCommunityCycle?.title})</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+
+                <span className="text-[11px] text-stone-400">
+                  Tu membresía activa te da acceso ininterrumpido a todos los ciclos continuos.
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -686,7 +882,7 @@ export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaul
       {/* ========================================================================= */}
       {activeTab === 'lessons' && (
         <div className="space-y-6">
-          <LessonsView />
+          <LessonsView initialLessonId={selectedLessonId} />
         </div>
       )}
 
