@@ -1,24 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, 
-  MessageSquare, 
-  Shield, 
   Calendar, 
   Clock, 
   ArrowRight, 
   CheckCircle, 
-  PenLine,
-  Flame,
-  Award,
-  Video,
-  PlayCircle,
-  Film
+  PenLine, 
+  Video, 
+  PlayCircle, 
+  Film 
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 import { VideoPracticeModal } from '../journal/VideoPracticeModal';
 import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
-import { SessionRecording } from '../../types';
+import { EventItem, SessionRecording } from '../../types';
 
 export const RightSidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -26,261 +21,229 @@ export const RightSidebar: React.FC = () => {
   const [activeRecordingForPlayer, setActiveRecordingForPlayer] = useState<SessionRecording | null>(null);
   const { 
     currentUser, 
-    members, 
-    posts, 
     events, 
-    recordings,
-    nextUpcomingEvent,
+    recordings, 
+    nextUpcomingEvent, 
     todayJournalSession, 
     toggleRegisterEvent,
-    currentCommunityCycle
+    trackZoomJoinClick
   } = useDataStore();
 
-  const nextSession = nextUpcomingEvent || events.find(e => e.status === 'upcoming') || events[0];
-  const adminCount = members.filter(m => m.role === 'admin').length;
+  const isLive = (status?: string) => status === 'live' || status === 'LIVE';
+  const isUpcoming = (status?: string) => 
+    status === 'upcoming' || status === 'SCHEDULED' || isLive(status);
 
-  const nextSessionRecording = React.useMemo(() => {
-    if (!nextSession) return null;
+  // Active or upcoming live session
+  const upcomingSession = nextUpcomingEvent || events.find(e => isUpcoming(e.status));
+
+  // Matched recording for upcoming/latest session
+  const upcomingSessionRecording = React.useMemo(() => {
+    if (!upcomingSession) return null;
     return recordings.find(r => 
-      r.event_id === nextSession.id || 
-      (nextSession.recording_id && r.id === nextSession.recording_id) ||
-      (nextSession.recording_url && (r.storage_path === nextSession.recording_url || r.video_url === nextSession.recording_url)) ||
-      (r.storage_path && r.storage_path.includes(nextSession.id))
-    ) || (nextSession.recording_url ? {
-      id: nextSession.recording_id || `rec-${nextSession.id}`,
-      event_id: nextSession.id,
-      title: nextSession.title || 'Sesión en Directo',
-      description: nextSession.description || '',
-      date: nextSession.date ? nextSession.date.split('T')[0] : new Date().toISOString().split('T')[0],
-      duration: `${nextSession.duration_minutes || 35} min`,
-      duration_seconds: (nextSession.duration_minutes || 35) * 60,
-      category: nextSession.theme || 'El Presente',
-      storage_path: nextSession.recording_url,
-      video_url: nextSession.recording_url,
-      thumbnail_url: nextSession.host_avatar || '',
-      status: 'AVAILABLE' as const,
-      views_count: nextSession.attendees_count || 1,
-      is_member_only: true,
-    } : null);
-  }, [nextSession, recordings]);
+      r.event_id === upcomingSession.id || 
+      (upcomingSession.recording_id && r.id === upcomingSession.recording_id) ||
+      (upcomingSession.recording_url && (r.storage_path === upcomingSession.recording_url || r.video_url === upcomingSession.recording_url)) ||
+      (r.storage_path && r.storage_path.includes(upcomingSession.id))
+    );
+  }, [upcomingSession, recordings]);
 
+  // Latest recording available from the archive
   const latestRecording = React.useMemo(() => {
     if (recordings.length === 0) return null;
     return recordings[0];
   }, [recordings]);
 
-  const currentCycleDisplay = React.useMemo(() => {
-    const now = new Date();
-    const month = now.toLocaleDateString('es-ES', { month: 'long' });
-    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
-    if (currentCommunityCycle?.title) {
-      return `${capitalizedMonth} · ${currentCommunityCycle.title}`;
+  const handleJoinZoom = async (event: EventItem) => {
+    if (currentUser?.membership_status === 'EXPIRED') {
+      navigate('/membership?from=events_zoom_expired');
+      return;
     }
-    return capitalizedMonth;
-  }, [currentCommunityCycle]);
+    await trackZoomJoinClick(event.id);
+    const zoomUrl = event.meeting_url || event.zoom_meeting_url;
+    if (zoomUrl) {
+      window.open(zoomUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      navigate('/events');
+    }
+  };
 
   return (
     <aside className="w-80 h-full flex flex-col p-4 space-y-4 overflow-y-auto select-none">
-      {/* 1. Community Brand Card & Stats */}
-      <div className="travesia-card p-4 space-y-3 bg-gradient-to-b from-white to-sand-50/60">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="font-serif font-bold text-stone-900 tracking-wide">TRAVESÍA</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sand-200 text-stone-700">
-              Comunidad
-            </span>
-          </div>
-          <p className="text-xs text-stone-600 leading-relaxed">
-            Espacio privado para desacelerar, silenciar el ruido, escuchar la voz de Dios y tomar acción diaria deliberada.
-          </p>
-        </div>
-
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-3 gap-2 py-2.5 border-y border-sand-200/80 text-center">
-          <div>
-            <div className="flex items-center justify-center gap-1 text-stone-500 text-[10px] mb-0.5">
-              <Users className="w-3 h-3" />
-              <span>Miembros</span>
-            </div>
-            <p className="font-bold text-sm text-stone-900">{members.length}</p>
-          </div>
-          <div>
-            <div className="flex items-center justify-center gap-1 text-stone-500 text-[10px] mb-0.5">
-              <MessageSquare className="w-3 h-3" />
-              <span>Aportes</span>
-            </div>
-            <p className="font-bold text-sm text-stone-900">{posts.length}+</p>
-          </div>
-          <div>
-            <div className="flex items-center justify-center gap-1 text-stone-500 text-[10px] mb-0.5">
-              <Shield className="w-3 h-3" />
-              <span>Guías</span>
-            </div>
-            <p className="font-bold text-sm text-stone-900">{adminCount}</p>
-          </div>
-        </div>
-
-        <div className="text-[11px] text-stone-500 flex items-center justify-between">
-          <span>Ciclo en curso</span>
-          <span 
-            className="font-semibold text-stone-800 truncate ml-2 text-right"
-            title={currentCommunityCycle ? `Ciclo ${currentCommunityCycle.cycle_number}: ${currentCommunityCycle.title} — ${currentCommunityCycle.theme}` : undefined}
-          >
-            {currentCycleDisplay}
-          </span>
-        </div>
-      </div>
-
-      {/* 2. Today's Practice Immediate Status */}
+      {/* ========================================================================= */}
+      {/* BLOQUE 1: TU PRÁCTICA DE HOY                                             */}
+      {/* ========================================================================= */}
       <div className={`p-4 rounded-2xl border transition-all ${
         todayJournalSession
           ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
           : 'bg-white border-sand-200 shadow-card'
       }`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-              Práctica de Hoy
-            </span>
-          </div>
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+            Tu Práctica de Hoy
+          </span>
           {todayJournalSession ? (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-              <CheckCircle className="w-3 h-3" /> Completada
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full">
+              <CheckCircle className="w-3.5 h-3.5" /> Completada
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-              <Clock className="w-3 h-3" /> Pendiente
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-full">
+              <Clock className="w-3.5 h-3.5" /> Pendiente
             </span>
           )}
         </div>
 
         {todayJournalSession ? (
-          <div className="space-y-2">
-            <p className="text-xs text-stone-600 line-clamp-2">
-              <strong className="text-stone-800">Compromiso:</strong> "{todayJournalSession.action_commitment}"
-            </p>
+          <div className="space-y-2.5">
+            <div className="bg-white/90 p-3 rounded-xl border border-emerald-100/80 text-xs">
+              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wide block mb-0.5">
+                Compromiso del día:
+              </span>
+              <p className="text-stone-700 italic leading-relaxed">
+                "{todayJournalSession.action_commitment || 'Práctica realizada con fidelidad.'}"
+              </p>
+            </div>
             <button
               onClick={() => navigate('/journal')}
-              className="text-xs text-emerald-800 hover:text-emerald-900 font-medium underline flex items-center gap-1"
+              className="text-xs text-emerald-800 hover:text-emerald-950 font-semibold flex items-center gap-1 pt-0.5"
             >
-              Ver reflexión completa <ArrowRight className="w-3 h-3" />
+              <span>Ver reflexión en el diario</span>
+              <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-stone-600">
-              Aún no has completado los 5 movimientos de hoy. Tómate 25-30 minutos para desacelerar y escribir o sigue la sesión guiada.
+          <div className="space-y-2.5">
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Dedica 25-30 minutos al silencio, vaciar el ruido mental y sellar tu compromiso para la jornada.
             </p>
             <button
-              onClick={() => navigate('/journal')}
-              className="travesia-btn-primary w-full text-xs py-2 shadow-sm"
+              onClick={() => navigate('/journal/today')}
+              className="travesia-btn-primary w-full text-xs py-2.5 shadow-sm flex items-center justify-center gap-1.5"
             >
-              <PenLine className="w-3.5 h-3.5 mr-1" />
-              Comenzar práctica ahora
+              <PenLine className="w-3.5 h-3.5" />
+              <span>Escribir en el Diario</span>
             </button>
             <button
               type="button"
               onClick={() => setIsVideoModalOpen(true)}
-              className="w-full py-2 px-3 rounded-xl border border-sand-300 text-stone-700 hover:bg-sand-100 hover:text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              className="w-full py-2 px-3 rounded-xl border border-sand-300 text-stone-700 hover:bg-sand-100 hover:text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors bg-sand-50/50"
             >
-              <Video className="w-3.5 h-3.5 text-bronze-600" />
+              <Video className="w-3.5 h-3.5 text-amber-700" />
               <span>Práctica completada por video</span>
             </button>
           </div>
         )}
       </div>
 
-      <VideoPracticeModal 
-        isOpen={isVideoModalOpen} 
-        onClose={() => setIsVideoModalOpen(false)} 
-      />
-
-      {/* 3. Upcoming Guided Live Session */}
-      {nextSession && (
-        <div className="travesia-card p-4 space-y-3">
+      {/* ========================================================================= */}
+      {/* BLOQUE 2: PRÓXIMA SESIÓN O GRABACIÓN RECIENTE                            */}
+      {/* ========================================================================= */}
+      {upcomingSession ? (
+        <div className="travesia-card p-4 space-y-3 bg-white">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-bronze-600" />
-              Próxima sesión
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
+              {isLive(upcomingSession.status) ? (
+                <span className="flex items-center gap-1.5 text-rose-600 font-bold">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+                  </span>
+                  En directo ahora
+                </span>
+              ) : (
+                <>
+                  <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Próxima sesión en vivo</span>
+                </>
+              )}
             </span>
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
-              {nextSession.duration_minutes} min
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sand-100 text-stone-600">
+              {upcomingSession.duration_minutes || 35} min
             </span>
           </div>
 
           <div>
-            <h4 className="font-serif font-semibold text-sm text-stone-900 leading-snug">
-              {nextSession.title}
+            <h4 className="font-serif font-bold text-sm text-stone-900 leading-snug line-clamp-2">
+              {upcomingSession.title}
             </h4>
-            <p className="text-xs text-bronze-700 font-medium mt-1">
-              {nextSession.time_display}
+            <p className="text-xs text-amber-800 font-medium mt-1">
+              {upcomingSession.time_display}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 pt-1 text-xs text-stone-500">
-            <img
-              src={nextSession.host_avatar}
-              alt={nextSession.host_name}
-              className="w-5 h-5 rounded-full object-cover border border-sand-300"
-            />
-            <span className="truncate">Guía: {nextSession.host_name}</span>
-            <span className="text-stone-300">·</span>
-            <span>{nextSession.attendees_count} inscritos</span>
-          </div>
+          {upcomingSession.host_name && (
+            <div className="flex items-center gap-2 pt-0.5 text-xs text-stone-500">
+              <img
+                src={upcomingSession.host_avatar || '/alberto-calvo.png'}
+                alt={upcomingSession.host_name}
+                className="w-5 h-5 rounded-full object-cover border border-sand-300"
+              />
+              <span className="truncate">Guía: {upcomingSession.host_name}</span>
+              {upcomingSession.attendees_count ? (
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span>{upcomingSession.attendees_count} inscritos</span>
+                </>
+              ) : null}
+            </div>
+          )}
 
-          {nextSessionRecording ? (
-            <div className="space-y-2 pt-1">
+          {/* Action button */}
+          {upcomingSessionRecording ? (
+            <button
+              onClick={() => setActiveRecordingForPlayer(upcomingSessionRecording)}
+              className="w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 transition-all shadow-sm"
+            >
+              <PlayCircle className="w-4 h-4 text-stone-950" />
+              <span>Ver Grabación en Directo</span>
+            </button>
+          ) : (
+            <div className="space-y-1.5 pt-1">
               <button
-                onClick={() => setActiveRecordingForPlayer(nextSessionRecording)}
-                className="w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-sm"
+                onClick={() => handleJoinZoom(upcomingSession)}
+                className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                  isLive(upcomingSession.status)
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
+                    : upcomingSession.user_is_registered
+                    ? 'bg-stone-900 hover:bg-stone-800 text-white'
+                    : 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+                }`}
               >
-                <PlayCircle className="w-4 h-4 text-stone-950" />
-                <span>Ver Grabación en Directo</span>
+                <Video className="w-4 h-4" />
+                <span>
+                  {isLive(upcomingSession.status)
+                    ? 'Entrar a Zoom en Vivo'
+                    : upcomingSession.user_is_registered
+                    ? 'Acceder a la sesión Zoom'
+                    : 'Inscribirme al directo'}
+                </span>
               </button>
-              {nextSession.status === 'upcoming' && (
+              {!isLive(upcomingSession.status) && (
                 <button
-                  onClick={() => toggleRegisterEvent(nextSession.id)}
-                  className={`w-full py-1.5 px-3 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
-                    nextSession.user_is_registered
-                      ? 'bg-sand-100 text-stone-700 border border-sand-300'
-                      : 'bg-stone-100 hover:bg-sand-200 text-stone-700'
-                  }`}
+                  onClick={() => toggleRegisterEvent(upcomingSession.id)}
+                  className="w-full text-center text-[11px] text-stone-500 hover:text-stone-800 font-medium py-1"
                 >
-                  {nextSession.user_is_registered ? '✓ Registrado' : 'Inscribirme al directo'}
+                  {upcomingSession.user_is_registered ? 'Cancelar inscripción' : 'Recordarme por email'}
                 </button>
               )}
             </div>
-          ) : (
-            <button
-              onClick={() => toggleRegisterEvent(nextSession.id)}
-              className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                nextSession.user_is_registered
-                  ? 'bg-sand-100 hover:bg-sand-200 text-stone-800 border border-sand-300'
-                  : 'bg-stone-900 hover:bg-stone-800 text-white'
-              }`}
-            >
-              {nextSession.user_is_registered ? (
-                <>
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  Registrado · Entrar en la sesión →
-                </>
-              ) : (
-                <>
-                  Inscribirme a la sesión →
-                </>
-              )}
-            </button>
           )}
-        </div>
-      )}
 
-      {/* 3b. Latest Recorded Live Session */}
-      {latestRecording && (!nextSessionRecording || nextSessionRecording.id !== latestRecording.id) && (
-        <div className="travesia-card p-4 space-y-2.5 bg-gradient-to-br from-stone-900 to-stone-950 text-white border-stone-800 shadow-md">
+          <div className="pt-2 border-t border-sand-100 flex justify-between items-center">
+            <button
+              onClick={() => navigate('/events')}
+              className="text-stone-500 hover:text-stone-800 font-medium flex items-center gap-1 text-[11px]"
+            >
+              <span>Ver todas las sesiones y grabaciones</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      ) : latestRecording ? (
+        <div className="travesia-card p-4 space-y-3 bg-gradient-to-br from-stone-900 to-stone-950 text-white border-stone-800 shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
               <Film className="w-3.5 h-3.5" />
-              Grabación en directo
+              Grabación reciente
             </span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-800 text-stone-300">
               {latestRecording.duration || '35 min'}
@@ -298,90 +261,29 @@ export const RightSidebar: React.FC = () => {
 
           <button
             onClick={() => setActiveRecordingForPlayer(latestRecording)}
-            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 transition-all shadow-sm"
+            className="w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 transition-all shadow-sm"
           >
-            <PlayCircle className="w-3.5 h-3.5 text-stone-950" />
-            Reproducir Grabación
+            <PlayCircle className="w-4 h-4 text-stone-950" />
+            <span>Reproducir Grabación</span>
           </button>
-        </div>
-      )}
 
-      {/* 4. Current 4-Week Journey Progress Card */}
-      <div className="travesia-card p-4 space-y-3 bg-white">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
-            El Camino de 4 Semanas
-          </span>
-          <span className="text-[10px] font-mono font-bold text-bronze-700">
-            Semana {currentUser.current_week} de 4
-          </span>
+          <div className="pt-2 border-t border-stone-800 flex justify-between items-center">
+            <button
+              onClick={() => navigate('/events?tab=archive')}
+              className="text-stone-400 hover:text-sand-200 font-medium flex items-center gap-1 text-[11px]"
+            >
+              <span>Hemeroteca completa ({recordings.length})</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
+      ) : null}
 
-        <div>
-          <h4 className="font-serif font-semibold text-sm text-stone-900">
-            {currentUser.current_week === 1 && 'Semana 1: El Presente'}
-            {currentUser.current_week === 2 && 'Semana 2: La Visión'}
-            {currentUser.current_week === 3 && 'Semana 3: Los Obstáculos'}
-            {currentUser.current_week === 4 && 'Semana 4: El Trabajo'}
-          </h4>
-          <p className="text-xs text-stone-500 mt-0.5">
-            {currentUser.current_week === 1 && 'Construyendo el cimiento de la práctica diaria.'}
-            {currentUser.current_week === 2 && 'Discerniendo la vida que estás llamado a forjar.'}
-            {currentUser.current_week === 3 && 'Identificando y derribando patrones de autoboicot.'}
-            {currentUser.current_week === 4 && 'Tomando decisiones difíciles y compromisos ineludibles.'}
-          </p>
-        </div>
-
-        {/* 4-step progress line */}
-        <div className="grid grid-cols-4 gap-1.5 pt-1">
-          {[1, 2, 3, 4].map(w => (
-            <div
-              key={w}
-              className={`h-1.5 rounded-full ${
-                w < currentUser.current_week
-                  ? 'bg-emerald-500'
-                  : w === currentUser.current_week
-                  ? 'bg-bronze-600'
-                  : 'bg-sand-200'
-              }`}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={() => navigate('/journey')}
-          className="text-xs font-semibold text-stone-700 hover:text-stone-900 flex items-center gap-1 pt-1"
-        >
-          Ver currículo completo <ArrowRight className="w-3 h-3" />
-        </button>
-      </div>
-
-      {/* 5. Personal Metrics Quick Snapshot */}
-      <div className="travesia-card p-4 space-y-2">
-        <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-          Tu Consistencia
-        </span>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-stone-600 flex items-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-amber-500" /> Racha activa:
-          </span>
-          <span className="font-bold text-stone-900">{currentUser.streak_days} días</span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-stone-600 flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Sesiones completas:
-          </span>
-          <span className="font-bold text-stone-900">{currentUser.completed_sessions_count}</span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-stone-600 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-blue-500" /> Tiempo en quietud:
-          </span>
-          <span className="font-bold text-stone-900">
-            {Math.floor(currentUser.reflection_minutes / 60)}h {currentUser.reflection_minutes % 60}m
-          </span>
-        </div>
-      </div>
+      {/* Video Practice Modal */}
+      <VideoPracticeModal 
+        isOpen={isVideoModalOpen} 
+        onClose={() => setIsVideoModalOpen(false)} 
+      />
 
       {/* Recording Player Modal */}
       {activeRecordingForPlayer && (

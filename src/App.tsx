@@ -84,7 +84,7 @@ export function App() {
 
               {/* Resources, Books & Archive */}
               <Route path="library" element={<LibraryView />} />
-              <Route path="archive" element={<ArchiveView />} />
+              <Route path="archive" element={<EventsView defaultTab="archive" />} />
 
               {/* Members & Progress */}
               <Route path="members" element={<MembersView />} />

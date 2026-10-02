@@ -10,7 +10,8 @@ import {
   Shield, 
   X,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  Video
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 
@@ -117,21 +118,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
             <span>El Camino de 4 Semanas</span>
           </NavLink>
           <NavLink to="/events" onClick={onCloseMobile} className={navItemClass}>
-            <Calendar className="w-4 h-4 text-stone-500" />
-            <span className="flex-1">Eventos en directo</span>
-            {liveEvent && (
+            <Video className="w-4 h-4 text-amber-700" />
+            <span className="flex-1">Sesiones en Vivo & Archivo</span>
+            {liveEvent ? (
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
               </span>
+            ) : (
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sand-200 text-stone-600 font-semibold">
+                {recordings.length}
+              </span>
             )}
-          </NavLink>
-          <NavLink to="/archive" onClick={onCloseMobile} className={navItemClass}>
-            <Film className="w-4 h-4 text-amber-700" />
-            <span className="flex-1">Grabaciones de directos</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sand-200 text-stone-600 font-semibold">
-              {recordings.length}
-            </span>
           </NavLink>
         </div>
 

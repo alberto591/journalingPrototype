@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
 import { eventsService } from '../../services/eventsService';
 import { EventItem, SessionRecording } from '../../types';
 import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
+import { ArchiveView } from '../archive/ArchiveView';
 import { 
   Calendar, 
   Clock, 
@@ -19,8 +20,13 @@ import {
   Square
 } from 'lucide-react';
 
-export const EventsView: React.FC = () => {
+interface EventsViewProps {
+  defaultTab?: 'upcoming' | 'archive';
+}
+
+export const EventsView: React.FC<EventsViewProps> = ({ defaultTab }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { 
     events, 
     recordings, 
@@ -31,7 +37,10 @@ export const EventsView: React.FC = () => {
     trackZoomJoinClick 
   } = useDataStore();
 
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const queryTab = searchParams.get('tab') as 'upcoming' | 'archive' | null;
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'archive'>(
+    defaultTab || queryTab || 'upcoming'
+  );
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [activePlaybackRecording, setActivePlaybackRecording] = useState<SessionRecording | null>(null);
 
@@ -155,7 +164,7 @@ export const EventsView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-block">
-              Sesiones Guiadas en Directo (Zoom)
+              Sesiones en Vivo & Archivo
             </span>
             {currentLiveEvent && (
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600 text-white font-mono text-xs font-bold uppercase tracking-wider animate-pulse">
@@ -165,10 +174,10 @@ export const EventsView: React.FC = () => {
             )}
           </div>
           <h1 className="font-serif text-2xl sm:text-3xl font-bold">
-            Eventos y Práctica en Vivo
+            Sesiones en Vivo & Archivo
           </h1>
           <p className="text-sand-300 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed">
-            Escribir en soledad es transformador, pero escribir juntos en directo multiplica la disciplina y disuelve el aislamiento.
+            Directos matutinos por Zoom y grabaciones completas para practicar cuando lo necesites, en un solo lugar.
           </p>
         </div>
 
@@ -190,16 +199,6 @@ export const EventsView: React.FC = () => {
               <span>Entrar en Zoom</span>
             </button>
           ) : null}
-
-          {/* Quick link to recordings library */}
-          <button
-            onClick={() => navigate('/archive')}
-            className="text-xs text-sand-300 hover:text-white flex items-center gap-1.5 pt-1 transition-colors"
-          >
-            <Film className="w-3.5 h-3.5 text-amber-400" />
-            <span>Ver grabaciones anteriores ({recordings.length})</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
         </div>
       </div>
 
@@ -208,70 +207,50 @@ export const EventsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('upcoming')}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeTab === 'upcoming'
                 ? 'bg-stone-900 text-white shadow-sm'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
             }`}
           >
-            Próximas Sesiones ({upcomingEvents.length})
+            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+            <span>Próximos Directos ({upcomingEvents.length})</span>
           </button>
           <button
-            onClick={() => setActiveTab('past')}
+            onClick={() => setActiveTab('archive')}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'past'
+              activeTab === 'archive'
                 ? 'bg-stone-900 text-white shadow-sm'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
             }`}
           >
             <Film className="w-3.5 h-3.5 text-amber-600" />
-            <span>Sesiones Pasadas y Replays ({pastEvents.length})</span>
+            <span>Hemeroteca & Grabaciones ({recordings.length})</span>
           </button>
         </div>
-
-        <button
-          onClick={() => navigate('/archive')}
-          className="text-xs font-semibold text-amber-900 hover:text-amber-950 hidden sm:flex items-center gap-1"
-        >
-          <span>Ir a la Hemeroteca de Grabaciones</span>
-          <ArrowRight className="w-3 h-3" />
-        </button>
       </div>
 
-      {/* Info Callout for Replays */}
-      {activeTab === 'past' && (
-        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <Film className="w-4 h-4 text-amber-700 flex-shrink-0" />
-            <p className="text-xs leading-relaxed">
-              <strong>Hemeroteca de Grabaciones:</strong> Todas las sesiones guiadas matutinas quedan guardadas en video para que practiques a tu propio ritmo.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/archive')}
-            className="travesia-btn-primary text-xs py-1.5 px-3.5 whitespace-nowrap flex items-center gap-1 flex-shrink-0"
-          >
-            <span>Ver todo el Archivo</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Events List */}
-      <div className="space-y-4">
-        {displayedEvents.length === 0 ? (
-          <div className="travesia-card p-10 text-center text-stone-500 bg-sand-50/50 border-dashed border-sand-300">
-            <p className="font-serif font-bold text-base text-stone-800">
-              {activeTab === 'upcoming' ? 'No hay sesiones programadas por el momento.' : 'No hay grabaciones en esta lista.'}
-            </p>
-            <p className="text-xs text-stone-500 mt-1">
-              {activeTab === 'upcoming' 
-                ? 'Las próximas fechas se publican aquí con su sala de Zoom.' 
-                : 'Visita la hemeroteca para ver todas las grabaciones históricas.'}
-            </p>
-          </div>
-        ) : (
-          displayedEvents.map(event => {
+      {/* Tab 1: Próximos Directos */}
+      {activeTab === 'upcoming' && (
+        <div className="space-y-4">
+          {upcomingEvents.length === 0 ? (
+            <div className="travesia-card p-10 text-center text-stone-500 bg-sand-50/50 border-dashed border-sand-300">
+              <p className="font-serif font-bold text-base text-stone-800">
+                No hay sesiones en directo programadas por el momento.
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                Puedes acceder a las grabaciones anteriores en la pestaña de Hemeroteca.
+              </p>
+              <button
+                onClick={() => setActiveTab('archive')}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900"
+              >
+                <span>Ir a Grabaciones</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            upcomingEvents.map(event => {
             const eventIsLive = isLive(event.status);
             const hasRecording = Boolean(
               event.recording_url || 
@@ -468,7 +447,15 @@ export const EventsView: React.FC = () => {
             );
           })
         )}
-      </div>
+        </div>
+      )}
+
+      {/* Tab 2: Hemeroteca & Grabaciones */}
+      {activeTab === 'archive' && (
+        <div className="space-y-4">
+          <ArchiveView embedded={true} />
+        </div>
+      )}
 
       {/* Recording Player Modal */}
       <RecordingPlayerModal

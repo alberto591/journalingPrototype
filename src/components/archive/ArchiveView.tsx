@@ -6,7 +6,11 @@ import { RecordingPlayerModal } from '../recordings/RecordingPlayerModal';
 import { MembershipAccessGate } from '../modals/MembershipAccessGate';
 import { PlayCircle, Clock, Search, Film, Upload, Plus, ArrowRight } from 'lucide-react';
 
-export const ArchiveView: React.FC = () => {
+interface ArchiveViewProps {
+  embedded?: boolean;
+}
+
+export const ArchiveView: React.FC<ArchiveViewProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { recordings, events, currentUser } = useDataStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
@@ -75,38 +79,40 @@ export const ArchiveView: React.FC = () => {
   });
 
   return (
-    <div className="max-w-5xl mx-auto py-4 px-4 space-y-6 animate-fade-in">
+    <div className={`${embedded ? 'space-y-6 animate-fade-in' : 'max-w-5xl mx-auto py-4 px-4 space-y-6 animate-fade-in'}`}>
       {/* Hero Header */}
-      <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div>
-          <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-block mb-3">
-            Hemeroteca de Sesiones en Directo
-          </span>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold">
-            Grabaciones de Sesiones en Directo
-          </h1>
-          <p className="text-sand-300 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed">
-            Aquí tienes acceso a todas las sesiones de práctica matutina y mentorías en vivo grabadas para que practiques a tu propio ritmo.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
-          <div className="text-left sm:text-right">
-            <p className="font-serif font-bold text-3xl text-amber-400">{allRecordings.length}</p>
-            <p className="text-xs text-sand-400">Grabaciones disponibles</p>
+      {!embedded && (
+        <div className="bg-stone-900 text-sand-50 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div>
+            <span className="text-xs uppercase font-bold tracking-widest text-amber-400 bg-stone-800/80 px-3 py-1 rounded-full border border-stone-700/60 inline-block mb-3">
+              Hemeroteca de Sesiones en Directo
+            </span>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold">
+              Grabaciones de Sesiones en Directo
+            </h1>
+            <p className="text-sand-300 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed">
+              Aquí tienes acceso a todas las sesiones de práctica matutina y mentorías en vivo grabadas para que practiques a tu propio ritmo.
+            </p>
           </div>
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => navigate('/admin?tab=events')}
-              className="text-xs font-semibold py-2 px-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 flex items-center gap-1.5 shadow-sm transition-all"
-              title="Ir al panel de administración para subir o gestionar grabaciones"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Subir Grabación MP4</span>
-            </button>
-          )}
+
+          <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
+            <div className="text-left sm:text-right">
+              <p className="font-serif font-bold text-3xl text-amber-400">{allRecordings.length}</p>
+              <p className="text-xs text-sand-400">Grabaciones disponibles</p>
+            </div>
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/admin?tab=events')}
+                className="text-xs font-semibold py-2 px-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 flex items-center gap-1.5 shadow-sm transition-all"
+                title="Ir al panel de administración para subir o gestionar grabaciones"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Subir Grabación MP4</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="space-y-3">
