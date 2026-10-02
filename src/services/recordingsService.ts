@@ -51,10 +51,45 @@ export const recordingsService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        return { recordings: [], error: error.message };
+      const list: SessionRecording[] = (data || []) as SessionRecording[];
+
+      // Also ensure any event with recording_url is represented in recordings list
+      try {
+        const { data: eventRows } = await supabase
+          .from('events')
+          .select('*')
+          .not('recording_url', 'is', null);
+
+        if (eventRows && eventRows.length > 0) {
+          eventRows.forEach((evt: any) => {
+            const alreadyInList = list.some(
+              r => r.event_id === evt.id || r.id === evt.recording_id || r.storage_path === evt.recording_url
+            );
+            if (!alreadyInList && evt.recording_url) {
+              list.push({
+                id: evt.recording_id || `rec-${evt.id}`,
+                event_id: evt.id,
+                title: evt.title || 'Sesión en Directo',
+                description: evt.description || '',
+                date: evt.date ? evt.date.split('T')[0] : (evt.start_time ? evt.start_time.split('T')[0] : new Date().toISOString().split('T')[0]),
+                duration: `${evt.duration_minutes || 35} min`,
+                duration_seconds: (evt.duration_minutes || 35) * 60,
+                category: evt.theme || 'El Presente',
+                storage_path: evt.recording_url,
+                video_url: evt.recording_url,
+                thumbnail_url: evt.thumbnail_url || 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
+                status: 'AVAILABLE',
+                views_count: evt.attendees_count || 15,
+                is_member_only: true,
+              });
+            }
+          });
+        }
+      } catch {
+        // Fallback gracefully
       }
-      return { recordings: (data || []) as SessionRecording[], error: null };
+
+      return { recordings: list, error: null };
     } catch (err: any) {
       return { recordings: [], error: err?.message || 'Error al obtener grabaciones.' };
     }
@@ -300,26 +335,44 @@ export const recordingsService = {
 
         // Store metadata in session_recordings table
         try {
-          await supabase.from('session_recordings').insert({
-            id: recordingId,
-            event_id: eventId,
+          const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+          const dbRecordingId = isUuid(recordingId) 
+            ? recordingId 
+            : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+
+          const insertPayload: any = {
             title: title.trim(),
             description: description.trim(),
-            storage_path: relativeStoragePath,
+            storage_path: fullStoragePath,
             file_size_bytes: file.size,
             duration_seconds: durationSeconds,
             duration: `${Math.floor(durationSeconds / 60)} min`,
-            category,
+            category: category || 'El Presente',
             recording_strategy: 'HOSTED',
             status: 'AVAILABLE',
-            uploaded_by: uploadedByUserId,
             is_member_only: true,
-          });
+          };
+          if (dbRecordingId) insertPayload.id = dbRecordingId;
+          if (isUuid(eventId)) insertPayload.event_id = eventId;
+          if (isUuid(uploadedByUserId)) insertPayload.uploaded_by = uploadedByUserId;
+
+          const { data: insertedRec } = await supabase
+            .from('session_recordings')
+            .insert(insertPayload)
+            .select()
+            .single();
 
           // Update event in Supabase
-          await supabase.from('events').update({
-            recording_url: relativeStoragePath,
-          }).eq('id', eventId);
+          if (eventId) {
+            const eventUpdates: any = {
+              recording_url: fullStoragePath,
+              status: 'finished',
+            };
+            if (insertedRec?.id) {
+              eventUpdates.recording_id = insertedRec.id;
+            }
+            await supabase.from('events').update(eventUpdates).eq('id', eventId);
+          }
         } catch {
           // Table insert fallback for local/mock
         }

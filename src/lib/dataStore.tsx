@@ -398,8 +398,20 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (chRes.channels) setChannels(chRes.channels);
           if (pRes.posts) setPosts(pRes.posts);
           if (prRes.prompts && prRes.prompts.length > 0) setDailyPrompts(prRes.prompts);
-          if (evRes.events) setEvents(evRes.events);
-          if (recRes.recordings) setRecordings(recRes.recordings);
+          if (evRes.events && evRes.events.length > 0) {
+            setEvents(evRes.events);
+          }
+          if (recRes.recordings) {
+            setRecordings(prev => {
+              const remote = recRes.recordings || [];
+              if (remote.length === 0) return prev;
+              const remoteIds = new Set(remote.map(r => r.id));
+              const localOnly = prev.filter(
+                r => !remoteIds.has(r.id) && !remote.some(rem => rem.event_id === r.event_id)
+              );
+              return [...remote, ...localOnly];
+            });
+          }
           if (membersRes.data) setMembers(membersRes.data as Profile[]);
 
           // Fetch real private journal sessions for user
@@ -834,6 +846,7 @@ export const DataStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         ...e,
         recording_id: res.recording!.id,
         recording_url: res.recording!.storage_path,
+        status: 'finished',
       } : e));
     }
 

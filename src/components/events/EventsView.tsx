@@ -41,8 +41,11 @@ export const EventsView: React.FC = () => {
   const isPast = (status?: string) => 
     status === 'finished' || status === 'COMPLETED' || status === 'REPLAY_AVAILABLE';
 
-  const upcomingEvents = events.filter(e => isUpcoming(e.status));
-  const pastEvents = events.filter(e => isPast(e.status));
+  const hasRecording = (e: EventItem) => Boolean(
+    e.recording_url || recordings.some(r => r.event_id === e.id || r.id === e.recording_id)
+  );
+  const upcomingEvents = events.filter(e => isUpcoming(e.status) && !hasRecording(e));
+  const pastEvents = events.filter(e => isPast(e.status) || hasRecording(e));
   const displayedEvents = activeTab === 'upcoming' ? upcomingEvents : pastEvents;
 
   const currentLiveEvent = events.find(e => isLive(e.status));

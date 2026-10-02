@@ -15,33 +15,23 @@ export const ArchiveView: React.FC = () => {
   const [showAccessGate, setShowAccessGate] = useState(false);
   const [selectedLockedRecording, setSelectedLockedRecording] = useState<SessionRecording | null>(null);
 
-  const categories = [
-    'Todas',
-    'El Presente',
-    'La Visión',
-    'Los Obstáculos',
-    'El Trabajo',
-    'Relaciones',
-    'Propósito',
-    'Espiritualidad',
-    'Journaling'
-  ];
-
   // Combine direct recordings and any recorded events
   const allRecordings = React.useMemo(() => {
     const list = [...recordings];
     events.forEach(evt => {
-      const alreadyIncluded = list.some(r => r.event_id === evt.id || r.id === evt.recording_id);
+      const alreadyIncluded = list.some(
+        r => r.event_id === evt.id || r.id === evt.recording_id || (evt.recording_url && r.storage_path === evt.recording_url)
+      );
       if (!alreadyIncluded && (evt.recording_url || evt.recording_id)) {
         list.push({
           id: evt.recording_id || `rec-${evt.id}`,
           event_id: evt.id,
-          title: evt.title,
-          description: evt.description,
-          date: evt.date ? evt.date.split('T')[0] : '2026-09-28',
+          title: evt.title || 'Sesión en Directo',
+          description: evt.description || '',
+          date: evt.date ? evt.date.split('T')[0] : (evt.start_time ? evt.start_time.split('T')[0] : new Date().toISOString().split('T')[0]),
           duration: `${evt.duration_minutes || 35} min`,
           duration_seconds: (evt.duration_minutes || 35) * 60,
-          category: evt.theme || 'El Presente',
+          category: evt.theme || evt.weekly_theme || 'El Presente',
           storage_path: evt.recording_storage_path || evt.recording_url,
           video_url: evt.recording_url,
           thumbnail_url: evt.thumbnail_url || 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80',
@@ -54,11 +44,33 @@ export const ArchiveView: React.FC = () => {
     return list;
   }, [recordings, events]);
 
+  const dynamicCategories = React.useMemo(() => {
+    const base = [
+      'Todas',
+      'El Presente',
+      'La Visión',
+      'Los Obstáculos',
+      'El Trabajo',
+      'Relaciones',
+      'Propósito',
+      'Espiritualidad',
+      'Journaling'
+    ];
+    allRecordings.forEach(r => {
+      if (r.category && !base.some(b => b.toLowerCase() === r.category.toLowerCase())) {
+        base.push(r.category);
+      }
+    });
+    return base;
+  }, [allRecordings]);
+
   const filteredRecordings = allRecordings.filter(rec => {
-    const matchesCategory = selectedCategory === 'Todas' || rec.category === selectedCategory;
+    const matchesCategory = 
+      selectedCategory === 'Todas' || 
+      (rec.category && rec.category.toLowerCase() === selectedCategory.toLowerCase());
     const matchesQuery = 
-      rec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rec.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (rec.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (rec.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesQuery;
   });
 
@@ -111,7 +123,7 @@ export const ArchiveView: React.FC = () => {
 
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-          {categories.map(cat => (
+          {dynamicCategories.map(cat => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
