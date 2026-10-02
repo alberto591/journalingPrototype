@@ -11,7 +11,11 @@ export const PostComposer: React.FC<PostComposerProps> = ({ defaultChannelId, on
   const { currentUser, channels, createPost } = useDataStore();
   
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedChannelId, setSelectedChannelId] = useState(defaultChannelId || channels[0]?.id || 'ch-general');
+  const primaryChannels = channels.filter(c => 
+    c.slug === 'conversacion-principal' || c.slug === 'preguntas-soporte'
+  );
+  const selectChannels = primaryChannels.length > 0 ? primaryChannels : channels.slice(0, 2);
+  const [selectedChannelId, setSelectedChannelId] = useState(defaultChannelId || selectChannels[0]?.id || 'ch-general');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedTag, setSelectedTag] = useState('Reflexión');
@@ -60,7 +64,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({ defaultChannelId, on
                 onChange={(e) => setSelectedChannelId(e.target.value)}
                 className="text-xs font-semibold bg-sand-100 border border-sand-200 rounded-lg px-2.5 py-1 text-stone-800 focus:outline-none"
               >
-                {channels.map(ch => (
+                {selectChannels.map(ch => (
                   <option key={ch.id} value={ch.id}>
                     {ch.name}
                   </option>

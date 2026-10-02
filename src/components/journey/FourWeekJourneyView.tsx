@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDataStore } from '../../lib/dataStore';
+import { LessonsView } from '../lessons/LessonsView';
 import { 
   Sparkles, 
   CheckCircle, 
@@ -10,36 +11,42 @@ import {
   Compass, 
   Eye, 
   ShieldAlert, 
-  Hammer,
-  Award,
-  BookOpen,
-  Milestone,
-  History,
-  Check,
-  ChevronRight,
-  Flame,
-  Clock,
-  Layers,
+  Hammer, 
+  Award, 
+  BookOpen, 
+  Milestone, 
+  History, 
+  Check, 
+  ChevronRight, 
+  Flame, 
+  Clock, 
+  Layers, 
   HeartHandshake
 } from 'lucide-react';
 
-export const FourWeekJourneyView: React.FC = () => {
+interface FourWeekJourneyViewProps {
+  defaultTab?: 'foundation' | 'ongoing' | 'lessons' | 'history';
+}
+
+export const FourWeekJourneyView: React.FC<FourWeekJourneyViewProps> = ({ defaultTab }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { 
     currentUser, 
-    updateCurrentUserProfile,
-    personalJourneyProgress,
-    ongoingCycles,
-    currentCommunityCycle,
-    currentGlobalCommunityWeek,
-    memberTimeline,
-    completeFoundation,
+    updateCurrentUserProfile, 
+    personalJourneyProgress, 
+    ongoingCycles, 
+    currentCommunityCycle, 
+    currentGlobalCommunityWeek, 
+    memberTimeline, 
+    completeFoundation, 
     submitCycleReflection
   } = useDataStore();
 
   const isFoundationCompleted = Boolean(currentUser.foundation_completed_at);
-  const [activeTab, setActiveTab] = useState<'foundation' | 'ongoing' | 'history'>(
-    isFoundationCompleted ? 'ongoing' : 'foundation'
+  const paramTab = searchParams.get('tab') as 'foundation' | 'ongoing' | 'lessons' | 'history' | null;
+  const [activeTab, setActiveTab] = useState<'foundation' | 'ongoing' | 'lessons' | 'history'>(
+    defaultTab || paramTab || (isFoundationCompleted ? 'ongoing' : 'foundation')
   );
 
   const [selectedFoundationWeek, setSelectedFoundationWeek] = useState<number>(
@@ -193,6 +200,18 @@ export const FourWeekJourneyView: React.FC = () => {
             <Layers className="w-3.5 h-3.5" />
             <span>Capítulos Continuos (Ciclos)</span>
             <span className="text-[10px] bg-amber-500/20 text-amber-700 px-1.5 py-0.2 rounded-full font-bold">En Vivo</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('lessons')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'lessons'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-sand-100'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Lecciones del Camino</span>
           </button>
 
           <button
@@ -659,6 +678,15 @@ export const FourWeekJourneyView: React.FC = () => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 4: LECCIONES DEL CAMINO (SUBORDINATED FORMACIÓN)                     */}
+      {/* ========================================================================= */}
+      {activeTab === 'lessons' && (
+        <div className="space-y-6">
+          <LessonsView />
         </div>
       )}
 

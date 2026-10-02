@@ -78,9 +78,9 @@ export function App() {
               <Route path="events" element={<EventsView />} />
               <Route path="events/:id" element={<EventsView />} />
 
-              {/* Formación / Lecciones */}
-              <Route path="lessons" element={<LessonsView />} />
-              <Route path="lessons/:id" element={<LessonsView />} />
+              {/* Formación / Lecciones (Subordinadas dentro de El Camino) */}
+              <Route path="lessons" element={<FourWeekJourneyView defaultTab="lessons" />} />
+              <Route path="lessons/:id" element={<FourWeekJourneyView defaultTab="lessons" />} />
 
               {/* Resources, Books & Archive */}
               <Route path="library" element={<LibraryView />} />

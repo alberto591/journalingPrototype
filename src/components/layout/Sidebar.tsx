@@ -4,20 +4,13 @@ import {
   Home, 
   Users, 
   Flame, 
-  CheckCircle2, 
-  Compass, 
-  Waves, 
-  Eye, 
-  ShieldAlert, 
-  Hammer, 
-  BookOpen, 
   Film, 
   Calendar, 
   PenLine, 
-  TrendingUp, 
   Shield, 
   X,
-  Sparkles
+  Sparkles,
+  HelpCircle
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
 
@@ -28,22 +21,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, todayJournalSession, liveEvent, recordings } = useDataStore();
+  const { currentUser, todayJournalSession, liveEvent, recordings, members } = useDataStore();
 
-  const getChannelIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'flame': return <Flame className="w-4 h-4 text-amber-600" />;
-      case 'check-circle-2': return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-      case 'compass': return <Compass className="w-4 h-4 text-blue-600" />;
-      case 'waves': return <Waves className="w-4 h-4 text-cyan-600" />;
-      case 'eye': return <Eye className="w-4 h-4 text-purple-600" />;
-      case 'shield-alert': return <ShieldAlert className="w-4 h-4 text-rose-600" />;
-      case 'hammer': return <Hammer className="w-4 h-4 text-stone-600" />;
-      case 'book-open': return <BookOpen className="w-4 h-4 text-amber-700" />;
-      case 'film': return <Film className="w-4 h-4 text-indigo-600" />;
-      default: return <Users className="w-4 h-4 text-stone-500" />;
-    }
-  };
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
@@ -163,61 +142,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
           </div>
           <div className="space-y-0.5">
             <NavLink to="/community/conversacion-principal" onClick={onCloseMobile} className={() => channelItemClass('conversacion-principal')}>
-              {getChannelIcon('flame')}
+              <Flame className="w-4 h-4 text-amber-600" />
               <span className="truncate">Conversación principal</span>
             </NavLink>
-            <NavLink to="/community/sesiones-de-diario" onClick={onCloseMobile} className={() => channelItemClass('sesiones-de-diario')}>
-              {getChannelIcon('check-circle-2')}
-              <span className="truncate">Sesiones de diario</span>
-            </NavLink>
-            <NavLink to="/community/empezar-aqui" onClick={onCloseMobile} className={() => channelItemClass('empezar-aqui')}>
-              {getChannelIcon('compass')}
-              <span className="truncate">Empezar aquí</span>
-            </NavLink>
-            <NavLink to="/community/el-ruido" onClick={onCloseMobile} className={() => channelItemClass('el-ruido')}>
-              {getChannelIcon('waves')}
-              <span className="truncate">El Ruido</span>
-            </NavLink>
-            <NavLink to="/community/la-vision" onClick={onCloseMobile} className={() => channelItemClass('la-vision')}>
-              {getChannelIcon('eye')}
-              <span className="truncate">La Visión</span>
-            </NavLink>
-            <NavLink to="/community/los-obstaculos" onClick={onCloseMobile} className={() => channelItemClass('los-obstaculos')}>
-              {getChannelIcon('shield-alert')}
-              <span className="truncate">Los Obstáculos</span>
-            </NavLink>
-            <NavLink to="/community/el-trabajo" onClick={onCloseMobile} className={() => channelItemClass('el-trabajo')}>
-              {getChannelIcon('hammer')}
-              <span className="truncate">El Trabajo</span>
-            </NavLink>
-            <NavLink to="/library" onClick={onCloseMobile} className={navItemClass}>
-              {getChannelIcon('book-open')}
-              <span className="truncate">Biblioteca</span>
-            </NavLink>
-            <NavLink to="/archive" onClick={onCloseMobile} className={navItemClass}>
-              {getChannelIcon('film')}
-              <span className="truncate">Hemeroteca / Grabaciones</span>
+            <NavLink to="/community/preguntas-soporte" onClick={onCloseMobile} className={() => channelItemClass('preguntas-soporte')}>
+              <HelpCircle className="w-4 h-4 text-blue-600" />
+              <span className="truncate">Preguntas & Soporte</span>
             </NavLink>
           </div>
         </div>
 
-        {/* Crecimiento & Miembros */}
+        {/* Compañeros / Miembros */}
         <div>
           <div className="px-3 pb-1 text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
-            Crecimiento
+            Compañeros
           </div>
           <div className="space-y-0.5">
-            <NavLink to="/lessons" onClick={onCloseMobile} className={navItemClass}>
-              <Compass className="w-4 h-4 text-stone-500" />
-              <span>Lecciones del Camino</span>
-            </NavLink>
             <NavLink to="/members" onClick={onCloseMobile} className={navItemClass}>
               <Users className="w-4 h-4 text-stone-500" />
-              <span>Miembros ({useDataStore().members.length})</span>
-            </NavLink>
-            <NavLink to="/progress" onClick={onCloseMobile} className={navItemClass}>
-              <TrendingUp className="w-4 h-4 text-stone-500" />
-              <span>Mi Progreso</span>
+              <span className="flex-1">Directorio de miembros</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sand-200 text-stone-600 font-semibold">
+                {members.length}
+              </span>
             </NavLink>
           </div>
         </div>
