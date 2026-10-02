@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SessionRecording, Profile } from '../../types';
 import { useDataStore } from '../../lib/dataStore';
 import { recordingsService } from '../../services/recordingsService';
-import { X, Lock, Loader2, PlayCircle } from 'lucide-react';
+import { X, Lock, Loader2, PlayCircle, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface RecordingPlayerModalProps {
@@ -20,12 +20,14 @@ export const RecordingPlayerModal: React.FC<RecordingPlayerModalProps> = ({
   const [playableUrl, setPlayableUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState<boolean>(false);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!isOpen || !recording) {
       setPlayableUrl(null);
       setAccessError(null);
+      setMediaError(null);
       setIsLoadingUrl(false);
       return;
     }
@@ -35,6 +37,7 @@ export const RecordingPlayerModal: React.FC<RecordingPlayerModalProps> = ({
     async function loadSecureUrl() {
       setIsLoadingUrl(true);
       setAccessError(null);
+      setMediaError(null);
       setPlayableUrl(null);
 
       // 1. Strict access check (ACTIVE/TRIAL or ADMIN/COACH)
@@ -60,14 +63,14 @@ export const RecordingPlayerModal: React.FC<RecordingPlayerModalProps> = ({
 
         if (isMounted) {
           if (error || !url) {
-            setAccessError(error || 'No se pudo generar el enlace seguro de reproducción.');
+            setMediaError(error || 'No se pudo generar el enlace seguro de reproducción.');
           } else {
             setPlayableUrl(url);
           }
         }
       } catch (err: any) {
         if (isMounted) {
-          setAccessError('Error inesperado al preparar la reproducción.');
+          setMediaError('Error inesperado al preparar la reproducción.');
         }
       } finally {
         if (isMounted) {
@@ -166,6 +169,28 @@ export const RecordingPlayerModal: React.FC<RecordingPlayerModalProps> = ({
                 >
                   Activar Membresía
                 </Link>
+              )}
+            </div>
+          ) : mediaError ? (
+            <div className="p-6 text-center space-y-3 max-w-md">
+              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 text-rose-400 flex items-center justify-center mx-auto border border-rose-800">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h4 className="font-serif font-bold text-white text-base">Grabación no disponible</h4>
+              <p className="text-xs text-stone-300 leading-relaxed font-sans">{mediaError}</p>
+              {currentUser?.role === 'admin' && (
+                <div className="pt-2 space-y-2">
+                  <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                    Eres administrador: Asegúrate de que el archivo existe en el bucket <code className="text-white font-mono">session-recordings</code> de Supabase.
+                  </p>
+                  <Link
+                    to="/admin?tab=events"
+                    onClick={onClose}
+                    className="travesia-btn-secondary text-xs py-2 px-4 inline-block font-bold mt-1"
+                  >
+                    Gestionar en Panel Admin
+                  </Link>
+                </div>
               )}
             </div>
           ) : playableUrl ? (

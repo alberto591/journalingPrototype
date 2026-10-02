@@ -17,8 +17,7 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = 5368709120,
   allowed_mime_types = ARRAY['video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska'];
 
--- 2. Ensure RLS is enabled on storage objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Note: RLS is already enabled by default on storage.objects by Supabase
 
 -- 3. Policy: Administrators have full read/write access to upload & delete recordings
 DROP POLICY IF EXISTS "Admins have full access to session recordings storage" ON storage.objects;
@@ -26,7 +25,10 @@ CREATE POLICY "Admins have full access to session recordings storage"
   ON storage.objects FOR ALL
   USING (
     bucket_id = 'session-recordings'
-    AND public.is_admin(auth.uid())
+    AND (
+      public.is_admin(auth.uid())
+      OR EXISTS (SELECT 1 FROM public.admin_roles ar WHERE ar.user_id = auth.uid())
+    )
   );
 
 -- 4. Policy: Authenticated users can read session recordings objects

@@ -122,15 +122,53 @@ export const recordingsService = {
     // If Supabase is configured and we have a storage path, generate a signed URL (expires in 2 hours)
     if (isSupabaseConfigured && recording.storage_path) {
       try {
-        const { data, error } = await supabase.storage
+        let cleanPath = recording.storage_path.trim();
+
+        // 1. If already an HTTP/HTTPS URL, return directly
+        if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+          return { playableUrl: cleanPath, error: null };
+        }
+
+        // 2. Strip leading bucket name or slashes
+        // e.g. "session-recordings/evt-1/rec.mp4" -> "evt-1/rec.mp4"
+        if (cleanPath.startsWith(`${STORAGE_BUCKET}/`)) {
+          cleanPath = cleanPath.slice(STORAGE_BUCKET.length + 1);
+        } else if (cleanPath.startsWith(`/${STORAGE_BUCKET}/`)) {
+          cleanPath = cleanPath.slice(STORAGE_BUCKET.length + 2);
+        }
+        cleanPath = cleanPath.replace(/^\/+/, '');
+
+        let { data, error } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .createSignedUrl(recording.storage_path, 7200);
+          .createSignedUrl(cleanPath, 7200);
+
+        // Fallback: If cleanPath failed, try with original storage_path in case it was stored differently
+        if (error && cleanPath !== recording.storage_path) {
+          const fallbackRes = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .createSignedUrl(recording.storage_path, 7200);
+          if (fallbackRes.data?.signedUrl) {
+            data = fallbackRes.data;
+            error = null;
+          }
+        }
+
+        if (data?.signedUrl) {
+          return { playableUrl: data.signedUrl, error: null };
+        }
+
+        // Fallback to direct video_url if available
+        if (recording.video_url && (recording.video_url.startsWith('http://') || recording.video_url.startsWith('https://'))) {
+          return { playableUrl: recording.video_url, error: null };
+        }
 
         if (error) {
           return { playableUrl: null, error: error.message };
         }
-        return { playableUrl: data.signedUrl, error: null };
       } catch (err: any) {
+        if (recording.video_url && (recording.video_url.startsWith('http://') || recording.video_url.startsWith('https://'))) {
+          return { playableUrl: recording.video_url, error: null };
+        }
         return { playableUrl: null, error: err?.message || 'Error al generar enlace seguro de reproducción.' };
       }
     }
@@ -267,7 +305,7 @@ export const recordingsService = {
             event_id: eventId,
             title: title.trim(),
             description: description.trim(),
-            storage_path: fullStoragePath,
+            storage_path: relativeStoragePath,
             file_size_bytes: file.size,
             duration_seconds: durationSeconds,
             duration: `${Math.floor(durationSeconds / 60)} min`,
@@ -280,7 +318,7 @@ export const recordingsService = {
 
           // Update event in Supabase
           await supabase.from('events').update({
-            recording_url: fullStoragePath,
+            recording_url: relativeStoragePath,
           }).eq('id', eventId);
         } catch {
           // Table insert fallback for local/mock
