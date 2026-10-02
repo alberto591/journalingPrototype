@@ -62,13 +62,13 @@ export const FourWeekJourneyView: React.FC = () => {
       icon: Compass,
       focus: 'Aprender a parar, bajar el ritmo y habitar el ahora ante Dios.',
       topics: [
-        'Slowing Down: Salir del modo reactivo del mundo exterior',
-        'Clearing Mental Noise: Trasladar el desorden mental al papel blanco',
-        'Honest Journaling: Escribir sin intentar quedar bien contigo mismo',
-        'Emotional Awareness: Nombrar el dolor, la soledad y la ira sin anestesiarte',
-        'Silence: Entrenar el músculo de estar en quietud sin pantallas',
-        'Listening: Reconocer la voz y el discernimiento de Dios',
-        'Action: Sellar cada amanecer con un paso tangible'
+        'Frenar y Desacelerar: Salir del modo reactivo del mundo exterior',
+        'Limpiar el Ruido Mental: Trasladar el desorden mental al papel blanco',
+        'Escritura Honesta: Escribir sin intentar quedar bien contigo mismo',
+        'Conciencia Emocional: Nombrar el dolor, la soledad y la ira sin anestesiarte',
+        'Silencio Santo: Entrenar el músculo de estar en quietud sin pantallas',
+        'Escucha Espiritual: Reconocer la voz y el discernimiento de Dios',
+        'Acción Deliberada: Sellar cada amanecer con un paso tangible'
       ],
       exercises: [
         'Rutina del Despertador Analógico: Sacar el teléfono del dormitorio',
