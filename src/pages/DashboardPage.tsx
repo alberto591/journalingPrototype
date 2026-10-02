@@ -4,6 +4,7 @@ import { useDataStore } from '../lib/dataStore';
 import { PostComposer } from '../components/community/PostComposer';
 import { PostCard } from '../components/community/PostCard';
 import { RecordingPlayerModal } from '../components/recordings/RecordingPlayerModal';
+import { VideoPracticeModal } from '../components/journal/VideoPracticeModal';
 import { zoomService } from '../services/zoomService';
 import { SessionRecording, EventItem } from '../types';
 import { 
@@ -46,6 +47,7 @@ export const DashboardPage: React.FC = () => {
   const [zoomError, setZoomError] = useState<string | null>(null);
   const [activePlaybackRecording, setActivePlaybackRecording] = useState<SessionRecording | null>(null);
   const [isPlayerModalOpen, setIsPlayerModalOpen] = useState<boolean>(false);
+  const [isVideoPracticeModalOpen, setIsVideoPracticeModalOpen] = useState<boolean>(false);
 
   const nextSession = nextUpcomingEvent || events.find(e => e.status === 'upcoming') || events[0];
 
@@ -229,13 +231,23 @@ export const DashboardPage: React.FC = () => {
                     <span>Ver mi reflexión de hoy</span>
                   </button>
                 ) : (
-                  <button
-                    onClick={() => navigate('/journal')}
-                    className="w-full sm:w-auto travesia-btn-accent text-xs py-3.5 px-8 font-bold shadow-xl flex items-center justify-center gap-2 text-stone-950"
-                  >
-                    <PenLine className="w-4 h-4" />
-                    <span>Empezar práctica ahora →</span>
-                  </button>
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                    <button
+                      onClick={() => navigate('/journal')}
+                      className="w-full sm:w-auto travesia-btn-accent text-xs py-3 px-5 font-bold shadow-xl flex items-center justify-center gap-2 text-stone-950"
+                    >
+                      <PenLine className="w-4 h-4" />
+                      <span>Empezar práctica escrita →</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsVideoPracticeModalOpen(true)}
+                      className="w-full sm:w-auto py-3 px-4 rounded-xl text-xs font-bold border border-sand-400/40 text-sand-100 hover:bg-stone-800/80 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Video className="w-4 h-4 text-amber-400" />
+                      <span>Práctica completada por video</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -547,6 +559,12 @@ export const DashboardPage: React.FC = () => {
           setIsPlayerModalOpen(false);
           setActivePlaybackRecording(null);
         }}
+      />
+
+      {/* Video Practice Modal */}
+      <VideoPracticeModal
+        isOpen={isVideoPracticeModalOpen}
+        onClose={() => setIsVideoPracticeModalOpen(false)}
       />
     </div>
   );

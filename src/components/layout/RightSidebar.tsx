@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -10,12 +10,15 @@ import {
   CheckCircle, 
   PenLine,
   Flame,
-  Award
+  Award,
+  Video
 } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
+import { VideoPracticeModal } from '../journal/VideoPracticeModal';
 
 export const RightSidebar: React.FC = () => {
   const navigate = useNavigate();
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const { 
     currentUser, 
     members, 
@@ -112,9 +115,9 @@ export const RightSidebar: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-xs text-stone-600">
-              Aún no has completado los 5 movimientos de hoy. Tómate 25-30 minutos para desacelerar y escribir.
+              Aún no has completado los 5 movimientos de hoy. Tómate 25-30 minutos para desacelerar y escribir o sigue la sesión guiada.
             </p>
             <button
               onClick={() => navigate('/journal')}
@@ -123,9 +126,22 @@ export const RightSidebar: React.FC = () => {
               <PenLine className="w-3.5 h-3.5 mr-1" />
               Comenzar práctica ahora
             </button>
+            <button
+              type="button"
+              onClick={() => setIsVideoModalOpen(true)}
+              className="w-full py-2 px-3 rounded-xl border border-sand-300 text-stone-700 hover:bg-sand-100 hover:text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Video className="w-3.5 h-3.5 text-bronze-600" />
+              <span>Práctica completada por video</span>
+            </button>
           </div>
         )}
       </div>
+
+      <VideoPracticeModal 
+        isOpen={isVideoModalOpen} 
+        onClose={() => setIsVideoModalOpen(false)} 
+      />
 
       {/* 3. Upcoming Guided Live Session */}
       {nextSession && (

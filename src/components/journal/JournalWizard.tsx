@@ -8,10 +8,12 @@ import { MovementFeelEmotions } from './MovementFeelEmotions';
 import { MovementListen } from './MovementListen';
 import { MovementAct } from './MovementAct';
 import { JournalSummaryView } from './JournalSummaryView';
-import { Lock, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Lock, RotateCcw, ShieldCheck, Video } from 'lucide-react';
+import { VideoPracticeModal } from './VideoPracticeModal';
 
 export const JournalWizard: React.FC = () => {
   const navigate = useNavigate();
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const { 
     todayPrompt, 
     todayJournalSession, 
@@ -213,9 +215,20 @@ export const JournalWizard: React.FC = () => {
             })}
           </div>
 
-          <div className="hidden md:flex items-center gap-1.5 text-[11px] text-stone-500 pl-4 border-l border-sand-200">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Privado · Protegido por RLS</span>
+          <div className="flex items-center gap-2.5 pl-3 border-l border-sand-200">
+            <button
+              type="button"
+              onClick={() => setIsVideoModalOpen(true)}
+              className="text-[11px] font-bold text-bronze-800 hover:text-stone-950 bg-sand-100 hover:bg-sand-200/80 px-2.5 py-1 rounded-xl flex items-center gap-1.5 transition-colors whitespace-nowrap border border-sand-300/80"
+              title="Si hiciste la práctica en video, márcala aquí directamente"
+            >
+              <Video className="w-3.5 h-3.5 text-bronze-600" />
+              <span>Práctica por video</span>
+            </button>
+            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-stone-500 pl-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Privado</span>
+            </div>
           </div>
         </div>
       </div>
@@ -279,6 +292,12 @@ export const JournalWizard: React.FC = () => {
           isSaving={isSaving}
         />
       )}
+
+      <VideoPracticeModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+        onSuccess={() => navigate('/dashboard')}
+      />
     </div>
   );
 };
