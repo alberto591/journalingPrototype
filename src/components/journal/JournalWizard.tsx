@@ -26,6 +26,14 @@ export const JournalWizard: React.FC = () => {
   const [viewingSummary, setViewingSummary] = useState<boolean>(Boolean(todayJournalSession));
   const [completedSession, setCompletedSession] = useState<JournalSession | null>(todayJournalSession);
 
+  // Synchronize state if todayJournalSession loads asynchronously
+  useEffect(() => {
+    if (todayJournalSession) {
+      setCompletedSession(todayJournalSession);
+      setViewingSummary(true);
+    }
+  }, [todayJournalSession]);
+
   // Restore step from draft if available, otherwise 1
   const [currentMovement, setCurrentMovement] = useState<1 | 2 | 3 | 4 | 5>(() => {
     if (journalDraft?.currentMovementStep && !todayJournalSession) {
@@ -166,7 +174,9 @@ export const JournalWizard: React.FC = () => {
     setCurrentMovement(1);
   };
 
-  if (viewingSummary && completedSession) {
+  const sessionToShow = completedSession || todayJournalSession;
+
+  if (viewingSummary && sessionToShow) {
     return (
       <div className="space-y-4">
         <div className="flex justify-end max-w-3xl mx-auto px-4">
@@ -178,7 +188,7 @@ export const JournalWizard: React.FC = () => {
             <span>Editar o repetir sesión de hoy</span>
           </button>
         </div>
-        <JournalSummaryView session={completedSession} onNewSession={handleRestartPractice} />
+        <JournalSummaryView session={sessionToShow} onNewSession={handleRestartPractice} />
       </div>
     );
   }

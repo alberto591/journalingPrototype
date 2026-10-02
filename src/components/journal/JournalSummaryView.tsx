@@ -33,10 +33,13 @@ export const JournalSummaryView: React.FC<JournalSummaryViewProps> = ({ session,
   const [sharedToCommunity, setSharedToCommunity] = useState(false);
 
   const handleCopySummary = () => {
-    const text = `TRAVESÍA — Mi Reflexión de Hoy (${session.date})
-• Emociones reconocidas: ${session.emotions.map(e => e.category).join(', ')}
+    const emotionsList = (session.emotions && session.emotions.length > 0)
+      ? session.emotions.map(e => e.category).join(', ')
+      : 'Paz y presencia';
+    const text = `TRAVESÍA — Mi Reflexión de Hoy (${session.date || ''})
+• Emociones reconocidas: ${emotionsList}
 • Lo que escuché: ${session.listening_notes || 'Silencio y oración'}
-• Mi compromiso: "${session.action_commitment}"`;
+• Mi compromiso: "${session.action_commitment || 'Práctica diaria completada'}"`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -45,17 +48,21 @@ export const JournalSummaryView: React.FC<JournalSummaryViewProps> = ({ session,
   const handleShareCommitment = () => {
     const journalChannel = channels.find(c => c.slug === 'sesiones-de-diario') || channels[0];
     const postTitle = `Compromiso de hoy (${new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })})`;
+    const emotionsStr = (session.emotions && session.emotions.length > 0)
+      ? `\nEmociones nombradas hoy: **${session.emotions.map(e => e.category).join(', ')}**\n`
+      : '';
     const content = `Acabo de completar mi práctica diaria de los 5 Movimientos.
-
-Emociones nombradas hoy: **${session.emotions.map(e => e.category).join(', ')}**
+${emotionsStr}
 ${session.listening_notes ? `\nLo que reconocí en el silencio:\n> "${session.listening_notes}"\n` : ''}
 Mi compromiso para hoy:
-🎯 **"${session.action_commitment}"**
+🎯 **"${session.action_commitment || 'Práctica diaria completada'}"**
 
 Rumbo a la noche sin evasivas. ¡Que tengan un día fecundo!`;
 
-    createPost(journalChannel.id, postTitle, content, ['PrácticaDiaria', 'Compromiso']);
-    setSharedToCommunity(true);
+    if (journalChannel?.id) {
+      createPost(journalChannel.id, postTitle, content, ['PrácticaDiaria', 'Compromiso']);
+      setSharedToCommunity(true);
+    }
   };
 
   return (
@@ -154,24 +161,26 @@ Rumbo a la noche sin evasivas. ¡Que tengan un día fecundo!`;
         </div>
 
         {/* 3. Qué sentiste */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-400">
-            <Heart className="w-4 h-4 text-rose-600" />
-            <span>3. Qué sentiste · Nombrar emociones</span>
+        {session.emotions && session.emotions.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-400">
+              <Heart className="w-4 h-4 text-rose-600" />
+              <span>3. Qué sentiste · Nombrar emociones</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {session.emotions.map((emo, idx) => (
+                <div key={idx} className="p-4 rounded-2xl bg-sand-50/60 border border-sand-200 space-y-1">
+                  <span className="font-serif font-bold text-sm text-stone-900 block">
+                    {emo.category}
+                  </span>
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    {emo.related_to || 'Reconocida sin explicación adjunta'}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {session.emotions.map((emo, idx) => (
-              <div key={idx} className="p-4 rounded-2xl bg-sand-50/60 border border-sand-200 space-y-1">
-                <span className="font-serif font-bold text-sm text-stone-900 block">
-                  {emo.category}
-                </span>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {emo.related_to || 'Reconocida sin explicación adjunta'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* 4. Qué escuchaste */}
         <div className="space-y-2">

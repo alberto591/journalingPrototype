@@ -122,7 +122,7 @@ export const JournalHistoryView: React.FC = () => {
 
                     <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                       <div className="hidden sm:flex items-center gap-1.5">
-                        {session.emotions.slice(0, 2).map(e => (
+                        {session.emotions && session.emotions.length > 0 && session.emotions.slice(0, 2).map(e => (
                           <span key={e.category} className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sand-100 text-stone-700">
                             {e.category}
                           </span>
@@ -140,21 +140,23 @@ export const JournalHistoryView: React.FC = () => {
                   {isExpanded && (
                     <div className="p-5 pt-0 border-t border-sand-100 bg-sand-50/40 space-y-4 animate-fade-in text-sm text-stone-700">
                       {/* Emotions */}
-                      <div className="space-y-1.5 pt-3">
-                        <span className="text-xs uppercase font-bold tracking-wider text-stone-400 block">
-                          Emociones Procesadas:
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {session.emotions.map((emo, idx) => (
-                            <div key={idx} className="p-3 bg-white rounded-xl border border-sand-200">
-                              <span className="font-serif font-bold text-xs text-stone-900 block">
-                                {emo.category}
-                              </span>
-                              <p className="text-xs text-stone-600 mt-0.5">{emo.related_to}</p>
-                            </div>
-                          ))}
+                      {session.emotions && session.emotions.length > 0 && (
+                        <div className="space-y-1.5 pt-3">
+                          <span className="text-xs uppercase font-bold tracking-wider text-stone-400 block">
+                            Emociones Procesadas:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {session.emotions.map((emo, idx) => (
+                              <div key={idx} className="p-3 bg-white rounded-xl border border-sand-200">
+                                <span className="font-serif font-bold text-xs text-stone-900 block">
+                                  {emo.category}
+                                </span>
+                                <p className="text-xs text-stone-600 mt-0.5">{emo.related_to}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Deep writing snippet */}
                       {session.deep_writing_10m && (
