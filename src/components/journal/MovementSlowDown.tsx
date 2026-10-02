@@ -209,15 +209,15 @@ export const MovementSlowDown: React.FC<MovementSlowDownProps> = ({
               <span>Oración de inicio:</span>
             </div>
             <p className="italic font-serif text-stone-800 text-sm">
-              "Good morning, Father. I am here.<br />
-              An imperfect human doing my best to seek You today.<br />
-              I am not sure if anything I am about to write is true,<br />
-              but it's the truth of what I am thinking and feeling,<br />
-              and I release it all to You.<br />
-              Redeem what needs to be redeemed<br />
-              and amplify what needs to be amplified.<br />
-              I give this time to You.<br />
-              Please be my guide and teacher. Amen."
+              "Buenos días, Padre. Aquí estoy.<br />
+              Un ser humano imperfecto haciendo lo mejor por buscarte hoy.<br />
+              No estoy seguro de si todo lo que voy a escribir es verdad,<br />
+              pero es la verdad de lo que estoy pensando y sintiendo,<br />
+              y te lo entrego todo a Ti.<br />
+              Redime lo que deba ser redimido<br />
+              y amplifica lo que deba ser amplificado.<br />
+              Te entrego este tiempo a Ti.<br />
+              Por favor sé mi guía y maestro. Amén."
             </p>
           </div>
 
