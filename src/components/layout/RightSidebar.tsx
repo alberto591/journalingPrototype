@@ -26,11 +26,22 @@ export const RightSidebar: React.FC = () => {
     events, 
     nextUpcomingEvent,
     todayJournalSession, 
-    toggleRegisterEvent 
+    toggleRegisterEvent,
+    currentCommunityCycle
   } = useDataStore();
 
   const nextSession = nextUpcomingEvent || events.find(e => e.status === 'upcoming') || events[0];
   const adminCount = members.filter(m => m.role === 'admin').length;
+
+  const currentCycleDisplay = React.useMemo(() => {
+    const now = new Date();
+    const month = now.toLocaleDateString('es-ES', { month: 'long' });
+    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+    if (currentCommunityCycle?.title) {
+      return `${capitalizedMonth} · ${currentCommunityCycle.title}`;
+    }
+    return capitalizedMonth;
+  }, [currentCommunityCycle]);
 
   return (
     <aside className="w-80 h-full flex flex-col p-4 space-y-4 overflow-y-auto select-none">
@@ -75,7 +86,12 @@ export const RightSidebar: React.FC = () => {
 
         <div className="text-[11px] text-stone-500 flex items-center justify-between">
           <span>Ciclo en curso</span>
-          <span className="font-semibold text-stone-800">Septiembre — Octubre</span>
+          <span 
+            className="font-semibold text-stone-800 truncate ml-2 text-right"
+            title={currentCommunityCycle ? `Ciclo ${currentCommunityCycle.cycle_number}: ${currentCommunityCycle.title} — ${currentCommunityCycle.theme}` : undefined}
+          >
+            {currentCycleDisplay}
+          </span>
         </div>
       </div>
 
